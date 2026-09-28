@@ -4,6 +4,9 @@ Rust workspace for small agent tools.
 
 ## flow
 
+See the [engine design and handoff](docs/flow-design.md) for decisions and
+remaining work.
+
 Build and test from the workspace root:
 
 ```sh
