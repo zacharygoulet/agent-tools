@@ -1,6 +1,6 @@
 use clap::Parser;
 use flow::{Instance, InstanceSavePolicy, Machine};
-use rust_utils::raise::{self, RaiseExt};
+use rust_utils::raise;
 
 #[derive(Parser)]
 enum Cli {
@@ -39,16 +39,14 @@ fn new(machine_name: String, instance_name: Option<String>, global: bool, copy_m
         raise::raise("automatic instance naming is not implemented yet");
     };
 
-    let machine = Machine::load_from_name(&machine_name).raise();
+    let machine = Machine::load_from_name(&machine_name);
     let instance = machine.into_new_instance(name);
-    let path = instance
-        .save_new(InstanceSavePolicy::from_cli_args(global, copy_machine))
-        .raise();
+    let path = instance.save_new(InstanceSavePolicy::from_cli_args(global, copy_machine));
     println!("created instance {} at {}", instance.name, path.display());
 }
 
 fn load(instance_name: String) {
-    let instance = Instance::load_from_name(&instance_name).raise();
+    let instance = Instance::load_from_name(&instance_name);
 
     println!(
         "instance: {}\nmachine: {}\nstate: {}",

@@ -8,8 +8,7 @@ use crate::{
     file_writer::FileWriter,
     storage::{Scope, Storage},
 };
-
-use crate::{Result, ResultContext, user_error};
+use rust_utils::raise::{self, RaiseContext};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -49,11 +48,11 @@ impl InstanceSavePolicy {
         }
     }
 
-    fn prepare_machine(&self, machine: &Machine) -> Result<()> {
+    fn prepare_machine(&self, machine: &Machine) {
         match self {
-            Self::Local => Ok(()),
+            Self::Local => {}
             Self::Global { copy_local_machine_to_global: true } => {
-                machine.install_global_from_local_if_missing()
+                machine.install_global_from_local_if_missing();
             }
             Self::Global { copy_local_machine_to_global: false } => machine.ensure_global_definition(),
         }
@@ -66,39 +65,38 @@ impl Instance {
         Self { name, machine, state }
     }
 
-    pub fn save_new(&self, policy: InstanceSavePolicy) -> Result<PathBuf> {
-        let path = Storage::current()?.new_instance_path(&self.name, policy.scope())?;
-        policy.prepare_machine(&self.machine)?;
-        self.save_to_path(&path)?;
-        Ok(path)
+    pub fn save_new(&self, policy: InstanceSavePolicy) -> PathBuf {
+        let path = Storage::current().new_instance_path(&self.name, policy.scope());
+        policy.prepare_machine(&self.machine);
+        self.save_to_path(&path);
+        path
     }
 
-    pub fn load_from_name(name: &str) -> Result<Self> {
-        let mut instance = Self::load_from_path(&Storage::current()?.find_instance(name)?)?;
+    pub fn load_from_name(name: &str) -> Self {
+        let mut instance = Self::load_from_path(&Storage::current().find_instance(name));
         instance.name = name.to_owned();
-        instance.validate_current_state()?;
-        Ok(instance)
+        instance.validate_current_state();
+        instance
     }
 
-    fn save_to_path(&self, path: &Path) -> Result<()> {
+    fn save_to_path(&self, path: &Path) {
         let contents =
-            toml::to_string(self).with_context(|| format!("serializing instance {:?}", self.name))?;
-        FileWriter::from(path.to_path_buf()).write_new(contents.as_bytes())
+            toml::to_string(self).raise_with_context(|| format!("serializing instance {:?}", self.name));
+        FileWriter::from(path.to_path_buf()).write_new(contents.as_bytes());
     }
 
-    fn load_from_path(path: &Path) -> Result<Self> {
-        let contents = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        toml::from_str(&contents).with_context(|| format!("loading instance {}", path.display()))
+    fn load_from_path(path: &Path) -> Self {
+        let contents = fs::read_to_string(path).raise_with_context(|| format!("reading {}", path.display()));
+        toml::from_str(&contents).raise_with_context(|| format!("loading instance {}", path.display()))
     }
 
-    fn validate_current_state(&self) -> Result<()> {
+    fn validate_current_state(&self) {
         if !self.machine.states.iter().any(|state| state.name == self.state.0) {
-            return Err(user_error(format!(
+            raise::raise(format!(
                 "instance {:?} refers to unknown state {:?} in machine {:?}",
                 self.name, self.state.0, self.machine.name
-            )));
+            ));
         }
-        Ok(())
     }
 }
 
@@ -107,7 +105,7 @@ where
     D: Deserializer<'de>,
 {
     let name = String::deserialize(deserializer)?;
-    Machine::load_from_name(&name).map_err(|error| serde::de::Error::custom(format!("{error:#}")))
+    Ok(Machine::load_from_name(&name))
 }
 
 fn save_machine_name<S>(machine: &Machine, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -125,6 +123,13 @@ mod tests {
 
     use super::{Instance, InstanceSavePolicy, Machine, StateName};
     use crate::State;
+    use rust_utils::raise::catch_raised;
+
+    fn raised_message<T: std::fmt::Debug>(operation: impl FnOnce() -> T) -> String {
+        catch_raised(std::panic::AssertUnwindSafe(operation))
+            .unwrap_err()
+            .to_string()
+    }
 
     #[test]
     fn save_policy_from_cli_flags() {
@@ -155,8 +160,7 @@ mod tests {
                 State { name: "Implement".into(), next: vec![] },
                 State { name: "Design".into(), next: vec![] },
             ],
-        )
-        .unwrap();
+        );
 
         let instance = Instance::new("run".into(), machine);
         assert_eq!(instance.name, "run");
@@ -196,15 +200,9 @@ mod tests {
             state: StateName("Design".into()),
         };
 
-        assert!(instance.validate_current_state().is_ok());
+        instance.validate_current_state();
         instance.state = StateName("Missing".into());
-        assert!(
-            instance
-                .validate_current_state()
-                .unwrap_err()
-                .to_string()
-                .contains("Missing")
-        );
+        assert!(raised_message(|| instance.validate_current_state()).contains("Missing"));
     }
 
     #[test]
@@ -219,9 +217,9 @@ mod tests {
         )
         .unwrap();
 
-        let error = Instance::load_from_path(&path).unwrap_err();
-        assert!(error.to_string().contains("loading instance"));
-        assert!(format!("{error:#}").contains("machine"));
+        let error = raised_message(|| Instance::load_from_path(&path));
+        assert!(error.contains("loading instance"));
+        assert!(error.contains("machine"));
     }
 
     #[test]
@@ -236,8 +234,8 @@ mod tests {
         )
         .unwrap();
 
-        let error = Instance::load_from_path(&path).unwrap_err();
-        assert!(error.to_string().contains("loading instance"));
+        let error = raised_message(|| Instance::load_from_path(&path));
+        assert!(error.contains("loading instance"));
     }
 
     #[test]
@@ -245,7 +243,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("missing");
 
-        let error = Instance::load_from_path(&path).unwrap_err();
-        assert!(error.to_string().contains("reading"));
+        let error = raised_message(|| Instance::load_from_path(&path));
+        assert!(error.contains("reading"));
     }
 }

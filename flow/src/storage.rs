@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use crate::{OptionContext, Result, ResultContext, user_error};
+use rust_utils::raise::{self, RaiseContext};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Scope {
@@ -15,8 +15,8 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub fn current() -> Result<Self> {
-        let cwd = env::current_dir().context("getting the current directory")?;
+    pub fn current() -> Self {
+        let cwd = env::current_dir().raise_with_context(|| "getting the current directory".into());
         let state_home = if let Some(path) = env::var_os("XDG_STATE_HOME")
             .filter(|value| !value.is_empty())
             .map(PathBuf::from)
@@ -26,89 +26,80 @@ impl Storage {
         } else {
             let home = env::var_os("HOME")
                 .filter(|value| !value.is_empty())
-                .context("neither XDG_STATE_HOME nor HOME identifies a state directory")?;
+                .raise_with_context(|| "neither XDG_STATE_HOME nor HOME identifies a state directory".into());
             PathBuf::from(home).join(".local/state")
         };
-        Ok(Self { local: cwd.join(".flow"), global: state_home.join("flow") })
+        Self { local: cwd.join(".flow"), global: state_home.join("flow") }
     }
 
-    pub fn find_machine(&self, name: &str) -> Result<PathBuf> {
+    pub fn find_machine(&self, name: &str) -> PathBuf {
         self.find(name, "machine", "machines")
     }
 
-    pub fn find_instance(&self, name: &str) -> Result<PathBuf> {
+    pub fn find_instance(&self, name: &str) -> PathBuf {
         self.find(name, "instance", "instances")
     }
 
-    pub fn find_local_machine(&self, name: &str) -> Result<PathBuf> {
-        let path = self.path(name, "machine", "machines", Scope::Local)?;
+    pub fn find_local_machine(&self, name: &str) -> PathBuf {
+        let path = self.path(name, "machine", "machines", Scope::Local);
         if !path.exists() {
-            return Err(user_error(format!(
-                "local machine {name:?} not found at {}",
-                path.display()
-            )));
+            raise::raise(format!("local machine {name:?} not found at {}", path.display()));
         }
-        Ok(path)
+        path
     }
 
-    pub fn find_global_machine(&self, name: &str) -> Result<PathBuf> {
-        let path = self.global_machine_path(name)?;
+    pub fn find_global_machine(&self, name: &str) -> PathBuf {
+        let path = self.global_machine_path(name);
         if !path.exists() {
-            return Err(user_error(format!(
-                "global machine {name:?} not found at {}",
-                path.display()
-            )));
+            raise::raise(format!("global machine {name:?} not found at {}", path.display()));
         }
-        Ok(path)
+        path
     }
 
-    pub fn global_machine_path(&self, name: &str) -> Result<PathBuf> {
+    pub fn global_machine_path(&self, name: &str) -> PathBuf {
         self.path(name, "machine", "machines", Scope::Global)
     }
 
-    pub fn new_instance_path(&self, name: &str, scope: Scope) -> Result<PathBuf> {
-        let local = self.path(name, "instance", "instances", Scope::Local)?;
-        let global = self.path(name, "instance", "instances", Scope::Global)?;
+    pub fn new_instance_path(&self, name: &str, scope: Scope) -> PathBuf {
+        let local = self.path(name, "instance", "instances", Scope::Local);
+        let global = self.path(name, "instance", "instances", Scope::Global);
         for path in [&local, &global] {
             if path.exists() {
-                return Err(user_error(format!(
-                    "instance {name:?} already exists at {}",
-                    path.display()
-                )));
+                raise::raise(format!("instance {name:?} already exists at {}", path.display()));
             }
         }
-        Ok(match scope {
+        match scope {
             Scope::Local => local,
             Scope::Global => global,
-        })
+        }
     }
 
-    fn find(&self, name: &str, kind: &str, directory: &str) -> Result<PathBuf> {
-        let local = self.path(name, kind, directory, Scope::Local)?;
+    fn find(&self, name: &str, kind: &str, directory: &str) -> PathBuf {
+        let local = self.path(name, kind, directory, Scope::Local);
         if local.exists() {
-            return Ok(local);
+            return local;
         }
-        let global = self.path(name, kind, directory, Scope::Global)?;
+        let global = self.path(name, kind, directory, Scope::Global);
         if global.exists() {
-            return Ok(global);
+            return global;
         }
-        Err(user_error(format!(
+        raise::raise(format!(
             "{kind} {name:?} not found (looked in {} and {})",
             local.display(),
             global.display()
-        )))
+        ));
     }
 
-    fn path(&self, name: &str, kind: &str, directory: &str, scope: Scope) -> Result<PathBuf> {
+    fn path(&self, name: &str, kind: &str, directory: &str, scope: Scope) -> PathBuf {
         if name.is_empty() || name == "." || name.contains("..") || name.contains('/') || name.contains('\\')
         {
-            return Err(user_error(format!("invalid {kind} name: {name:?}")));
+            raise::raise(format!("invalid {kind} name: {name:?}"));
         }
         let root = match scope {
             Scope::Local => &self.local,
             Scope::Global => &self.global,
         };
-        Ok(root.join(directory).join(name))
+        root.join(directory).join(name)
     }
 }
 
@@ -117,6 +108,13 @@ mod tests {
     use std::{fs, path::Path};
 
     use super::{Scope, Storage};
+    use rust_utils::raise::catch_raised;
+
+    fn raised_message<T: std::fmt::Debug>(operation: impl FnOnce() -> T) -> String {
+        catch_raised(std::panic::AssertUnwindSafe(operation))
+            .unwrap_err()
+            .to_string()
+    }
 
     fn storage_for_test(cwd: &Path, global_state_home: &Path) -> Storage {
         Storage { local: cwd.join(".flow"), global: global_state_home.join("flow") }
@@ -133,7 +131,7 @@ mod tests {
         fs::write(&global, "global").unwrap();
 
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert_eq!(storage.find_instance("run").unwrap(), local);
+        assert_eq!(storage.find_instance("run"), local);
     }
 
     #[test]
@@ -144,14 +142,14 @@ mod tests {
         fs::write(&global, "global").unwrap();
 
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert_eq!(storage.find_instance("run").unwrap(), global);
+        assert_eq!(storage.find_instance("run"), global);
     }
 
     #[test]
     fn reports_both_paths_when_missing() {
         let root = tempfile::tempdir().unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        let error = storage.find_instance("run").unwrap_err().to_string();
+        let error = raised_message(|| storage.find_instance("run"));
         assert!(error.contains(".flow/instances/run"));
         assert!(error.contains("global/flow/instances/run"));
     }
@@ -160,7 +158,7 @@ mod tests {
     fn rejects_names_that_escape_the_instances_directory() {
         let storage = storage_for_test(Path::new("."), Path::new("/tmp"));
         for name in ["", ".", "..", "../run", "nested/run", "nested\\run"] {
-            assert!(storage.find_instance(name).is_err());
+            assert!(catch_raised(|| storage.find_instance(name)).is_err());
         }
     }
 
@@ -174,9 +172,9 @@ mod tests {
         fs::write(&global, "global").unwrap();
 
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert_eq!(storage.find_machine("workflow").unwrap(), global);
+        assert_eq!(storage.find_machine("workflow"), global);
         fs::write(&local, "local").unwrap();
-        assert_eq!(storage.find_machine("workflow").unwrap(), local);
+        assert_eq!(storage.find_machine("workflow"), local);
     }
 
     #[test]
@@ -186,11 +184,11 @@ mod tests {
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::write(&local, "local").unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert!(storage.find_global_machine("workflow").is_err());
-        let global = storage.global_machine_path("workflow").unwrap();
+        assert!(catch_raised(|| storage.find_global_machine("workflow")).is_err());
+        let global = storage.global_machine_path("workflow");
         fs::create_dir_all(global.parent().unwrap()).unwrap();
         fs::write(&global, "global").unwrap();
-        assert_eq!(storage.find_global_machine("workflow").unwrap(), global);
+        assert_eq!(storage.find_global_machine("workflow"), global);
     }
 
     #[test]
@@ -198,11 +196,11 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
         assert_eq!(
-            storage.new_instance_path("run", Scope::Local).unwrap(),
+            storage.new_instance_path("run", Scope::Local),
             root.path().join(".flow/instances/run")
         );
         assert_eq!(
-            storage.new_instance_path("run", Scope::Global).unwrap(),
+            storage.new_instance_path("run", Scope::Global),
             root.path().join("global/flow/instances/run")
         );
     }
@@ -217,10 +215,10 @@ mod tests {
         fs::create_dir_all(global.parent().unwrap()).unwrap();
 
         fs::write(&local, "local").unwrap();
-        assert!(storage.new_instance_path("run", Scope::Global).is_err());
+        assert!(catch_raised(|| storage.new_instance_path("run", Scope::Global)).is_err());
         fs::remove_file(&local).unwrap();
         fs::write(&global, "global").unwrap();
-        assert!(storage.new_instance_path("run", Scope::Local).is_err());
+        assert!(catch_raised(|| storage.new_instance_path("run", Scope::Local)).is_err());
     }
 
     #[test]
@@ -228,7 +226,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let storage = storage_for_test(root.path(), root.path());
         for name in ["", ".", "..", "../run", "nested/run", "nested\\run"] {
-            assert!(storage.new_instance_path(name, Scope::Local).is_err());
+            assert!(catch_raised(|| storage.new_instance_path(name, Scope::Local)).is_err());
         }
     }
 
@@ -246,6 +244,6 @@ mod tests {
         fs::write(&global, "global").unwrap();
 
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert_eq!(storage.find_instance("run").unwrap(), global);
+        assert_eq!(storage.find_instance("run"), global);
     }
 }

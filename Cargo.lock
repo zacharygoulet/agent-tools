@@ -243,7 +243,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 [[package]]
 name = "rust-utils"
 version = "0.1.0"
-source = "git+https://github.com/zacharygoulet/rust-utils#04fab2b3b72bab5159a65e4106e45a9f46653591"
+source = "git+https://github.com/zacharygoulet/rust-utils#b25fa655494ecba8c0ee7309bb98674fcd45173a"
 dependencies = [
  "rust-utils-macros",
 ]
@@ -251,7 +251,7 @@ dependencies = [
 [[package]]
 name = "rust-utils-macros"
 version = "0.1.0"
-source = "git+https://github.com/zacharygoulet/rust-utils#04fab2b3b72bab5159a65e4106e45a9f46653591"
+source = "git+https://github.com/zacharygoulet/rust-utils#b25fa655494ecba8c0ee7309bb98674fcd45173a"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fs, path::Path};
 
 use crate::{Instance, file_writer::FileWriter, storage::Storage};
-use crate::{OptionContext, Result, ResultContext, user_error};
+use rust_utils::raise::{self, RaiseContext};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -26,92 +26,93 @@ pub struct State {
 pub struct StateName(pub String);
 
 impl Machine {
-    pub fn new(name: String, initial_state: StateName, states: Vec<State>) -> Result<Self> {
+    pub fn new(name: String, initial_state: StateName, states: Vec<State>) -> Self {
         let machine = Self { name, initial_state, states };
-        machine.validate()?;
-        Ok(machine)
+        machine.validate_at(None);
+        machine
     }
 
     pub fn into_new_instance(self, name: String) -> Instance {
         Instance::new(name, self)
     }
 
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) {
+        self.validate_at(None);
+    }
+
+    fn validate_at(&self, context: Option<&Path>) {
+        let raise_validation_error = |message: String| match context {
+            Some(path) => raise::raise(format!("validating {}: {message}", path.display())),
+            None => raise::raise(message),
+        };
         let mut all_state_names = HashSet::new();
         for state in &self.states {
             if !all_state_names.insert(state.name.as_str()) {
-                return Err(user_error(format!("duplicate state: {}", state.name)));
+                raise_validation_error(format!("duplicate state: {}", state.name));
             }
         }
 
         if !all_state_names.contains(self.initial_state.0.as_str()) {
-            return Err(user_error(format!(
-                "unknown initial state: {}",
-                self.initial_state.0
-            )));
+            raise_validation_error(format!("unknown initial state: {}", self.initial_state.0));
         }
 
         for state in &self.states {
             for next in &state.next {
                 if !all_state_names.contains(next.0.as_str()) {
-                    return Err(user_error(format!(
+                    raise_validation_error(format!(
                         "state {} points to unknown next state {}",
                         state.name, next.0
-                    )));
+                    ));
                 }
             }
         }
-        Ok(())
     }
 
-    pub fn load_from_name(name: &str) -> Result<Self> {
-        Self::load_from_path(&Storage::current()?.find_machine(name)?)
+    pub fn load_from_name(name: &str) -> Self {
+        Self::load_from_path(&Storage::current().find_machine(name))
     }
 
-    pub fn load_global_from_name(name: &str) -> Result<Self> {
-        Self::load_from_path(&Storage::current()?.find_global_machine(name)?)
+    pub fn load_global_from_name(name: &str) -> Self {
+        Self::load_from_path(&Storage::current().find_global_machine(name))
     }
 
-    pub fn ensure_global_definition(&self) -> Result<()> {
-        Self::load_global_from_name(&self.name)?;
-        Ok(())
+    pub fn ensure_global_definition(&self) {
+        Self::load_global_from_name(&self.name);
     }
 
-    pub fn install_global_from_local_if_missing(&self) -> Result<()> {
-        let storage = Storage::current()?;
-        let destination = storage.global_machine_path(&self.name)?;
+    pub fn install_global_from_local_if_missing(&self) {
+        let storage = Storage::current();
+        let destination = storage.global_machine_path(&self.name);
         if destination.exists() {
-            Self::load_from_path(&destination)?;
-            return Ok(());
+            Self::load_from_path(&destination);
+            return;
         }
 
-        let source = storage.find_local_machine(&self.name)?;
+        let source = storage.find_local_machine(&self.name);
         let contents =
-            fs::read_to_string(&source).with_context(|| format!("reading {}", source.display()))?;
-        Self::parse(&source, &contents)?;
-        FileWriter::from(destination)
-            .write_new(contents.as_bytes())
-            .with_context(|| format!("installing global machine {:?}", self.name))?;
-        Ok(())
+            fs::read_to_string(&source).raise_with_context(|| format!("reading {}", source.display()));
+        Self::parse(&source, &contents);
+        FileWriter::from(destination).write_new(contents.as_bytes());
     }
 
-    fn load_from_path(path: &Path) -> Result<Self> {
-        let contents = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    fn load_from_path(path: &Path) -> Self {
+        let contents = fs::read_to_string(path).raise_with_context(|| format!("reading {}", path.display()));
         Self::parse(path, &contents)
     }
 
-    fn parse(path: &Path, contents: &str) -> Result<Self> {
+    fn parse(path: &Path, contents: &str) -> Self {
         let definition: Machine =
-            toml::from_str(contents).with_context(|| format!("parsing {}", path.display()))?;
+            toml::from_str(contents).raise_with_context(|| format!("parsing {}", path.display()));
 
         let name = path
             .file_name()
             .and_then(|name| name.to_str())
-            .with_context(|| format!("machine path {} has no UTF-8 filename", path.display()))?
+            .expect("machine definition paths must have a UTF-8 filename")
             .to_owned();
 
-        Self::new(name, definition.initial_state, definition.states)
-            .with_context(|| format!("validating {}", path.display()))
+        let machine = Self { name, initial_state: definition.initial_state, states: definition.states };
+        machine.validate_at(Some(path));
+        machine
     }
 }
 
@@ -122,6 +123,13 @@ mod tests {
     use indoc::indoc;
 
     use super::{Machine, State, StateName};
+    use rust_utils::raise::catch_raised;
+
+    fn raised_message<T: std::fmt::Debug>(operation: impl FnOnce() -> T) -> String {
+        catch_raised(std::panic::AssertUnwindSafe(operation))
+            .unwrap_err()
+            .to_string()
+    }
 
     #[test]
     fn validates_normal_next_states() {
@@ -133,7 +141,7 @@ mod tests {
                 State { name: "review".into(), next: vec![] },
             ],
         };
-        assert!(machine.validate().is_ok());
+        machine.validate();
     }
 
     #[test]
@@ -145,8 +153,7 @@ mod tests {
                 State { name: "Implement".into(), next: vec![] },
                 State { name: "Design".into(), next: vec![] },
             ],
-        )
-        .unwrap();
+        );
 
         let instance = machine.into_new_instance("run".into());
         assert_eq!(instance.name, "run");
@@ -164,13 +171,7 @@ mod tests {
                 State { name: "draft".into(), next: vec![] },
             ],
         };
-        assert!(
-            machine
-                .validate()
-                .unwrap_err()
-                .to_string()
-                .contains("duplicate state")
-        );
+        assert!(raised_message(|| machine.validate()).contains("duplicate state"));
     }
 
     #[test]
@@ -180,13 +181,7 @@ mod tests {
             initial_state: StateName("draft".into()),
             states: vec![State { name: "draft".into(), next: vec![StateName("missing".into())] }],
         };
-        assert!(
-            machine
-                .validate()
-                .unwrap_err()
-                .to_string()
-                .contains("unknown next state")
-        );
+        assert!(raised_message(|| machine.validate()).contains("unknown next state"));
     }
 
     #[test]
@@ -207,7 +202,7 @@ mod tests {
         )
         .unwrap();
 
-        let machine = Machine::load_from_path(&path).unwrap();
+        let machine = Machine::load_from_path(&path);
         assert_eq!(machine.name, "workflow");
         assert_eq!(machine.initial_state.0, "Design");
         assert_eq!(machine.states.len(), 2);
@@ -222,13 +217,7 @@ mod tests {
             states: vec![State { name: "Design".into(), next: vec![] }],
         };
 
-        assert!(
-            machine
-                .validate()
-                .unwrap_err()
-                .to_string()
-                .contains("unknown initial state")
-        );
+        assert!(raised_message(|| machine.validate()).contains("unknown initial state"));
     }
 
     #[test]
@@ -245,19 +234,20 @@ mod tests {
         )
         .unwrap();
 
-        assert!(format!("{:#}", Machine::load_from_path(&path).unwrap_err()).contains("initial_state"));
+        assert!(raised_message(|| Machine::load_from_path(&path)).contains("initial_state"));
     }
 
     #[test]
     fn constructor_rejects_invalid_definition() {
-        let error = Machine::new(
-            "workflow".into(),
-            StateName("Missing".into()),
-            vec![State { name: "Design".into(), next: vec![] }],
-        )
-        .unwrap_err();
+        let error = raised_message(|| {
+            Machine::new(
+                "workflow".into(),
+                StateName("Missing".into()),
+                vec![State { name: "Design".into(), next: vec![] }],
+            )
+        });
 
-        assert!(error.to_string().contains("unknown initial state"));
+        assert!(error.contains("unknown initial state"));
     }
 
     #[test]
@@ -276,7 +266,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(format!("{:#}", Machine::load_from_path(&path).unwrap_err()).contains("unknown field"));
+        assert!(raised_message(|| Machine::load_from_path(&path)).contains("unknown field"));
     }
 
     #[test]
@@ -294,7 +284,7 @@ mod tests {
         )
         .unwrap();
 
-        let error = Machine::load_from_path(&path).unwrap_err();
-        assert!(format!("{error:#}").contains("unknown next state"));
+        let error = raised_message(|| Machine::load_from_path(&path));
+        assert!(error.contains("unknown next state"));
     }
 }
