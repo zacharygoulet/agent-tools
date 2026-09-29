@@ -9,7 +9,7 @@ use crate::{
     storage::{Scope, Storage},
 };
 
-use anyhow::{Context, Result, bail};
+use crate::{Result, ResultContext, user_error};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -93,12 +93,10 @@ impl Instance {
 
     fn validate_current_state(&self) -> Result<()> {
         if !self.machine.states.iter().any(|state| state.name == self.state.0) {
-            bail!(
+            return Err(user_error(format!(
                 "instance {:?} refers to unknown state {:?} in machine {:?}",
-                self.name,
-                self.state.0,
-                self.machine.name
-            );
+                self.name, self.state.0, self.machine.name
+            )));
         }
         Ok(())
     }

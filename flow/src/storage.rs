@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use anyhow::{Context, Result, bail};
+use crate::{OptionContext, Result, ResultContext, user_error};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Scope {
@@ -43,7 +43,10 @@ impl Storage {
     pub fn find_local_machine(&self, name: &str) -> Result<PathBuf> {
         let path = self.path(name, "machine", "machines", Scope::Local)?;
         if !path.exists() {
-            bail!("local machine {name:?} not found at {}", path.display());
+            return Err(user_error(format!(
+                "local machine {name:?} not found at {}",
+                path.display()
+            )));
         }
         Ok(path)
     }
@@ -51,7 +54,10 @@ impl Storage {
     pub fn find_global_machine(&self, name: &str) -> Result<PathBuf> {
         let path = self.global_machine_path(name)?;
         if !path.exists() {
-            bail!("global machine {name:?} not found at {}", path.display());
+            return Err(user_error(format!(
+                "global machine {name:?} not found at {}",
+                path.display()
+            )));
         }
         Ok(path)
     }
@@ -65,7 +71,10 @@ impl Storage {
         let global = self.path(name, "instance", "instances", Scope::Global)?;
         for path in [&local, &global] {
             if path.exists() {
-                bail!("instance {name:?} already exists at {}", path.display());
+                return Err(user_error(format!(
+                    "instance {name:?} already exists at {}",
+                    path.display()
+                )));
             }
         }
         Ok(match scope {
@@ -83,17 +92,17 @@ impl Storage {
         if global.exists() {
             return Ok(global);
         }
-        bail!(
+        Err(user_error(format!(
             "{kind} {name:?} not found (looked in {} and {})",
             local.display(),
             global.display()
-        )
+        )))
     }
 
     fn path(&self, name: &str, kind: &str, directory: &str, scope: Scope) -> Result<PathBuf> {
         if name.is_empty() || name == "." || name.contains("..") || name.contains('/') || name.contains('\\')
         {
-            bail!("invalid {kind} name: {name:?}");
+            return Err(user_error(format!("invalid {kind} name: {name:?}")));
         }
         let root = match scope {
             Scope::Local => &self.local,

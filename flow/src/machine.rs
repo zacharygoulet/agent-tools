@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fs, path::Path};
 
 use crate::{Instance, file_writer::FileWriter, storage::Storage};
-use anyhow::{Context, Result, bail};
+use crate::{OptionContext, Result, ResultContext, user_error};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -40,18 +40,24 @@ impl Machine {
         let mut all_state_names = HashSet::new();
         for state in &self.states {
             if !all_state_names.insert(state.name.as_str()) {
-                bail!("duplicate state: {}", state.name);
+                return Err(user_error(format!("duplicate state: {}", state.name)));
             }
         }
 
         if !all_state_names.contains(self.initial_state.0.as_str()) {
-            bail!("unknown initial state: {}", self.initial_state.0);
+            return Err(user_error(format!(
+                "unknown initial state: {}",
+                self.initial_state.0
+            )));
         }
 
         for state in &self.states {
             for next in &state.next {
                 if !all_state_names.contains(next.0.as_str()) {
-                    bail!("state {} points to unknown next state {}", state.name, next.0);
+                    return Err(user_error(format!(
+                        "state {} points to unknown next state {}",
+                        state.name, next.0
+                    )));
                 }
             }
         }

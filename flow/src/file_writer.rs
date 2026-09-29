@@ -1,6 +1,6 @@
 use std::{fs, io::Write, path::PathBuf};
 
-use anyhow::{Context, Result};
+use crate::{OptionContext, Result, ResultContext};
 use tempfile::NamedTempFile;
 
 pub struct FileWriter(PathBuf);

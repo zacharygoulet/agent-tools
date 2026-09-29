@@ -1,8 +1,6 @@
-use std::panic::{UnwindSafe, catch_unwind};
-
-use anyhow::{Result, bail};
 use clap::Parser;
 use flow::{Instance, InstanceSavePolicy, Machine};
+use rust_utils::raise::{self, RaiseExt};
 
 #[derive(Parser)]
 enum Cli {
@@ -22,25 +20,12 @@ enum Cli {
     },
 }
 
-fn main() -> Result<()> {
-    catch_panics(|| run(Cli::parse()))
+#[rust_utils::raise_handler]
+fn main() {
+    run(Cli::parse());
 }
 
-fn catch_panics(action: impl FnOnce() -> Result<()> + UnwindSafe) -> Result<()> {
-    match catch_unwind(action) {
-        Ok(result) => result,
-        Err(payload) => {
-            let message = payload
-                .downcast_ref::<String>()
-                .map(String::as_str)
-                .or_else(|| payload.downcast_ref::<&str>().copied())
-                .unwrap_or("non-string panic payload");
-            bail!("internal panic: {message}")
-        }
-    }
-}
-
-fn run(cli: Cli) -> Result<()> {
+fn run(cli: Cli) {
     match cli {
         Cli::New { machine_name, instance_name, global, copy_machine } => {
             new(machine_name, instance_name, global, copy_machine)
@@ -49,45 +34,33 @@ fn run(cli: Cli) -> Result<()> {
     }
 }
 
-fn new(machine_name: String, instance_name: Option<String>, global: bool, copy_machine: bool) -> Result<()> {
+fn new(machine_name: String, instance_name: Option<String>, global: bool, copy_machine: bool) {
     let Some(name) = instance_name else {
-        bail!("automatic instance naming is not implemented yet");
+        raise::raise("automatic instance naming is not implemented yet");
     };
 
-    let machine = Machine::load_from_name(&machine_name)?;
+    let machine = Machine::load_from_name(&machine_name).raise();
     let instance = machine.into_new_instance(name);
-    let path = instance.save_new(InstanceSavePolicy::from_cli_args(global, copy_machine))?;
+    let path = instance
+        .save_new(InstanceSavePolicy::from_cli_args(global, copy_machine))
+        .raise();
     println!("created instance {} at {}", instance.name, path.display());
-    Ok(())
 }
 
-fn load(instance_name: String) -> Result<()> {
-    let instance = Instance::load_from_name(&instance_name)?;
+fn load(instance_name: String) {
+    let instance = Instance::load_from_name(&instance_name).raise();
 
     println!(
         "instance: {}\nmachine: {}\nstate: {}",
         instance.name, instance.machine.name, instance.state.0
     );
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use clap::Parser;
 
-    use super::{Cli, catch_panics};
-
-    #[test]
-    fn catches_panics_as_errors() {
-        let error = catch_panics(|| -> anyhow::Result<()> { panic!("test panic") }).unwrap_err();
-        assert_eq!(error.to_string(), "internal panic: test panic");
-    }
-
-    #[test]
-    fn preserves_non_panic_errors() {
-        let error = catch_panics(|| Err(anyhow::anyhow!("ordinary error"))).unwrap_err();
-        assert_eq!(error.to_string(), "ordinary error");
-    }
+    use super::Cli;
 
     #[test]
     fn parses_new_with_global_instance_storage() {
