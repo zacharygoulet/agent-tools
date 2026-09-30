@@ -1,12 +1,12 @@
 use clap::Parser;
-use flow::{Instance, InstanceSavePolicy, Machine};
+use flow::{Instance, InstanceName, InstanceSavePolicy, Machine, MachineName};
 use rust_utils::raise;
 
 #[derive(Parser)]
 enum Cli {
     New {
-        machine_name: String,
-        instance_name: Option<String>,
+        machine_name: MachineName,
+        instance_name: Option<InstanceName>,
         /// Save globally, requiring an existing global machine definition.
         #[arg(short, long)]
         global: bool,
@@ -16,7 +16,7 @@ enum Cli {
     },
 
     Load {
-        instance_name: String,
+        instance_name: InstanceName,
     },
 }
 
@@ -34,19 +34,19 @@ fn run(cli: Cli) {
     }
 }
 
-fn new(machine_name: String, instance_name: Option<String>, global: bool, copy_machine: bool) {
+fn new(machine_name: MachineName, instance_name: Option<InstanceName>, global: bool, copy_machine: bool) {
     let Some(name) = instance_name else {
         raise::raise("automatic instance naming is not implemented yet");
     };
 
-    let machine = Machine::load_from_name(&machine_name);
+    let machine = Machine::load_from_name(machine_name.as_str());
     let instance = machine.into_new_instance(name);
     let path = instance.save_new(InstanceSavePolicy::from_cli_args(global, copy_machine));
     println!("created instance {} at {}", instance.name, path.display());
 }
 
-fn load(instance_name: String) {
-    let instance = Instance::load_from_name(&instance_name);
+fn load(instance_name: InstanceName) {
+    let instance = Instance::load_from_name(instance_name.as_str());
 
     println!(
         "instance: {}\nmachine: {}\nstate: {}",
@@ -70,7 +70,7 @@ mod tests {
                 instance_name: Some(instance_name),
                 global: true,
                 copy_machine: false,
-            } if machine_name == "workflow" && instance_name == "run"
+            } if machine_name.as_str() == "workflow" && instance_name.as_str() == "run"
         ));
     }
 
@@ -87,11 +87,18 @@ mod tests {
     }
 
     #[test]
+    fn rejects_invalid_names_during_argument_parsing() {
+        assert!(Cli::try_parse_from(["flow", "new", "../workflow", "run"]).is_err());
+        assert!(Cli::try_parse_from(["flow", "new", "workflow", "run/name"]).is_err());
+        assert!(Cli::try_parse_from(["flow", "load", "run name"]).is_err());
+    }
+
+    #[test]
     fn load_does_not_accept_global_flag() {
         assert!(Cli::try_parse_from(["flow", "load", "run", "-g"]).is_err());
         assert!(matches!(
             Cli::try_parse_from(["flow", "load", "run"]).unwrap(),
-            Cli::Load { instance_name } if instance_name == "run"
+            Cli::Load { instance_name } if instance_name.as_str() == "run"
         ));
     }
 }

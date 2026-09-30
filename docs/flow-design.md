@@ -70,9 +70,13 @@ context storage, Pi extension, or generated-name implementation exists yet.
 The old `.agent-sm` storage paths were renamed to `.flow`; other projects'
 old local files were not migrated automatically.
 
-The first requested style pass is unfinished: discuss validated machine and
-instance name types and moving CLI command handlers onto command types.
-A second general style change was mentioned but not specified. Return to
+The first requested style pass introduced distinct validated `MachineName`
+and `InstanceName` types. Machine and instance names use ASCII letters, digits,
+`-`, `_`, and `.`, with an alphanumeric first character. CLI parsing and public
+load/creation boundaries validate these names. State names remain
+human-readable, but machine validation rejects empty/whitespace-only and
+duplicate state names. Moving CLI command handlers onto command types remains
+open. A second general style change was mentioned but not specified. Return to
 Design with Zach before implementing each new slice; test and review before
 moving to another. Other open design questions include movement/history,
 hold/cancel/resume, informational guidance, definition versioning and

@@ -1,14 +1,14 @@
 use std::{collections::HashSet, fs, path::Path};
 
-use crate::{Instance, file_writer::FileWriter, storage::Storage};
+use crate::{Instance, InstanceName, MachineName, file_writer::FileWriter, storage::Storage};
 use rust_utils::raise::{self, RaiseContext};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Machine {
-    #[serde(skip)]
-    pub name: String,
+    #[serde(skip, default = "MachineName::placeholder")]
+    pub name: MachineName,
     pub initial_state: StateName,
     pub states: Vec<State>,
     // Possibly: guidance for the whole machine or for entering/leaving states.
@@ -26,13 +26,13 @@ pub struct State {
 pub struct StateName(pub String);
 
 impl Machine {
-    pub fn new(name: String, initial_state: StateName, states: Vec<State>) -> Self {
+    pub fn new(name: MachineName, initial_state: StateName, states: Vec<State>) -> Self {
         let machine = Self { name, initial_state, states };
         machine.validate_at(None);
         machine
     }
 
-    pub fn into_new_instance(self, name: String) -> Instance {
+    pub fn into_new_instance(self, name: InstanceName) -> Instance {
         Instance::new(name, self)
     }
 
@@ -47,6 +47,9 @@ impl Machine {
         };
         let mut all_state_names = HashSet::new();
         for state in &self.states {
+            if state.name.trim().is_empty() {
+                raise_validation_error("state names cannot be empty".to_owned());
+            }
             if !all_state_names.insert(state.name.as_str()) {
                 raise_validation_error(format!("duplicate state: {}", state.name));
             }
@@ -69,26 +72,28 @@ impl Machine {
     }
 
     pub fn load_from_name(name: &str) -> Self {
-        Self::load_from_path(&Storage::current().find_machine(name))
+        let name = MachineName::parse(name).unwrap_or_else(|error| raise::raise(error));
+        Self::load_from_path(&Storage::current().find_machine(name.as_str()))
     }
 
     pub fn load_global_from_name(name: &str) -> Self {
-        Self::load_from_path(&Storage::current().find_global_machine(name))
+        let name = MachineName::parse(name).unwrap_or_else(|error| raise::raise(error));
+        Self::load_from_path(&Storage::current().find_global_machine(name.as_str()))
     }
 
     pub fn ensure_global_definition(&self) {
-        Self::load_global_from_name(&self.name);
+        Self::load_global_from_name(self.name.as_str());
     }
 
     pub fn install_global_from_local_if_missing(&self) {
         let storage = Storage::current();
-        let destination = storage.global_machine_path(&self.name);
+        let destination = storage.global_machine_path(self.name.as_str());
         if destination.exists() {
             Self::load_from_path(&destination);
             return;
         }
 
-        let source = storage.find_local_machine(&self.name);
+        let source = storage.find_local_machine(self.name.as_str());
         let contents =
             fs::read_to_string(&source).raise_with_context(|| format!("reading {}", source.display()));
         Self::parse(&source, &contents);
@@ -107,8 +112,8 @@ impl Machine {
         let name = path
             .file_name()
             .and_then(|name| name.to_str())
-            .expect("machine definition paths must have a UTF-8 filename")
-            .to_owned();
+            .expect("machine definition paths must have a UTF-8 filename");
+        let name = MachineName::parse(name).unwrap_or_else(|error| raise::raise(error));
 
         let machine = Self { name, initial_state: definition.initial_state, states: definition.states };
         machine.validate_at(Some(path));
@@ -123,6 +128,7 @@ mod tests {
     use indoc::indoc;
 
     use super::{Machine, State, StateName};
+    use crate::MachineName;
     use rust_utils::raise::catch_raised;
 
     fn raised_message<T: std::fmt::Debug>(operation: impl FnOnce() -> T) -> String {
@@ -134,7 +140,7 @@ mod tests {
     #[test]
     fn validates_normal_next_states() {
         let machine = Machine {
-            name: "example".into(),
+            name: MachineName::parse("example").unwrap(),
             initial_state: StateName("draft".into()),
             states: vec![
                 State { name: "draft".into(), next: vec![StateName("review".into())] },
@@ -147,7 +153,7 @@ mod tests {
     #[test]
     fn into_new_instance_uses_initial_state() {
         let machine = Machine::new(
-            "workflow".into(),
+            MachineName::parse("workflow").unwrap(),
             StateName("Design".into()),
             vec![
                 State { name: "Implement".into(), next: vec![] },
@@ -155,16 +161,26 @@ mod tests {
             ],
         );
 
-        let instance = machine.into_new_instance("run".into());
+        let instance = machine.into_new_instance(crate::InstanceName::parse("run").unwrap());
         assert_eq!(instance.name, "run");
         assert_eq!(instance.machine.name, "workflow");
         assert_eq!(instance.state.0, "Design");
     }
 
     #[test]
+    fn rejects_empty_state_names() {
+        let machine = Machine {
+            name: MachineName::parse("example").unwrap(),
+            initial_state: StateName(" ".into()),
+            states: vec![State { name: " ".into(), next: vec![] }],
+        };
+        assert!(raised_message(|| machine.validate()).contains("state names cannot be empty"));
+    }
+
+    #[test]
     fn rejects_duplicate_names() {
         let machine = Machine {
-            name: "example".into(),
+            name: MachineName::parse("example").unwrap(),
             initial_state: StateName("draft".into()),
             states: vec![
                 State { name: "draft".into(), next: vec![] },
@@ -177,7 +193,7 @@ mod tests {
     #[test]
     fn rejects_unknown_next_state() {
         let machine = Machine {
-            name: "example".into(),
+            name: MachineName::parse("example").unwrap(),
             initial_state: StateName("draft".into()),
             states: vec![State { name: "draft".into(), next: vec![StateName("missing".into())] }],
         };
@@ -212,7 +228,7 @@ mod tests {
     #[test]
     fn rejects_unknown_initial_state() {
         let machine = Machine {
-            name: "example".into(),
+            name: MachineName::parse("example").unwrap(),
             initial_state: StateName("Missing".into()),
             states: vec![State { name: "Design".into(), next: vec![] }],
         };
@@ -241,7 +257,7 @@ mod tests {
     fn constructor_rejects_invalid_definition() {
         let error = raised_message(|| {
             Machine::new(
-                "workflow".into(),
+                MachineName::parse("workflow").unwrap(),
                 StateName("Missing".into()),
                 vec![State { name: "Design".into(), next: vec![] }],
             )

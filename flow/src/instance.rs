@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    Machine, StateName,
+    InstanceName, Machine, MachineName, StateName,
     file_writer::FileWriter,
     storage::{Scope, Storage},
 };
@@ -13,8 +13,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Instance {
-    #[serde(skip)]
-    pub name: String,
+    #[serde(skip, default = "InstanceName::placeholder")]
+    pub name: InstanceName,
     #[serde(deserialize_with = "load_machine", serialize_with = "save_machine_name")]
     pub machine: Machine,
     pub state: StateName,
@@ -60,21 +60,22 @@ impl InstanceSavePolicy {
 }
 
 impl Instance {
-    pub fn new(name: String, machine: Machine) -> Self {
+    pub fn new(name: InstanceName, machine: Machine) -> Self {
         let state = machine.initial_state.clone();
         Self { name, machine, state }
     }
 
     pub fn save_new(&self, policy: InstanceSavePolicy) -> PathBuf {
-        let path = Storage::current().new_instance_path(&self.name, policy.scope());
+        let path = Storage::current().new_instance_path(self.name.as_str(), policy.scope());
         policy.prepare_machine(&self.machine);
         self.save_to_path(&path);
         path
     }
 
     pub fn load_from_name(name: &str) -> Self {
-        let mut instance = Self::load_from_path(&Storage::current().find_instance(name));
-        instance.name = name.to_owned();
+        let name = InstanceName::parse(name).unwrap_or_else(|error| raise::raise(error));
+        let mut instance = Self::load_from_path(&Storage::current().find_instance(name.as_str()));
+        instance.name = name;
         instance.validate_current_state();
         instance
     }
@@ -105,14 +106,15 @@ where
     D: Deserializer<'de>,
 {
     let name = String::deserialize(deserializer)?;
-    Ok(Machine::load_from_name(&name))
+    let name = MachineName::parse(name).map_err(serde::de::Error::custom)?;
+    Ok(Machine::load_from_name(name.as_str()))
 }
 
 fn save_machine_name<S>(machine: &Machine, serializer: S) -> std::result::Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    serializer.serialize_str(&machine.name)
+    serializer.serialize_str(machine.name.as_str())
 }
 
 #[cfg(test)]
@@ -121,7 +123,8 @@ mod tests {
 
     use indoc::indoc;
 
-    use super::{Instance, InstanceSavePolicy, Machine, StateName};
+    use super::{Instance, InstanceName, InstanceSavePolicy, Machine, StateName};
+    use crate::MachineName;
     use crate::State;
     use rust_utils::raise::catch_raised;
 
@@ -154,7 +157,7 @@ mod tests {
     #[test]
     fn new_instance_starts_in_machines_initial_state() {
         let machine = Machine::new(
-            "workflow".into(),
+            MachineName::parse("workflow").unwrap(),
             StateName("Design".into()),
             vec![
                 State { name: "Implement".into(), next: vec![] },
@@ -162,7 +165,7 @@ mod tests {
             ],
         );
 
-        let instance = Instance::new("run".into(), machine);
+        let instance = Instance::new(InstanceName::parse("run").unwrap(), machine);
         assert_eq!(instance.name, "run");
         assert_eq!(instance.machine.name, "workflow");
         assert_eq!(instance.state.0, "Design");
@@ -171,9 +174,9 @@ mod tests {
     #[test]
     fn serializes_machine_by_name() {
         let instance = Instance {
-            name: "run".into(),
+            name: super::InstanceName::parse("run").unwrap(),
             machine: Machine {
-                name: "workflow".into(),
+                name: MachineName::parse("workflow").unwrap(),
                 initial_state: StateName("Design".into()),
                 states: vec![State { name: "Design".into(), next: vec![] }],
             },
@@ -191,9 +194,9 @@ mod tests {
     #[test]
     fn verifies_current_state_belongs_to_machine() {
         let mut instance = Instance {
-            name: "run".into(),
+            name: super::InstanceName::parse("run").unwrap(),
             machine: Machine {
-                name: "workflow".into(),
+                name: MachineName::parse("workflow").unwrap(),
                 initial_state: StateName("Design".into()),
                 states: vec![State { name: "Design".into(), next: vec![] }],
             },
