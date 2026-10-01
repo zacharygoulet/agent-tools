@@ -8,11 +8,12 @@ use crate::{
     file_writer::FileWriter,
     storage::{Scope, Storage},
 };
-use rust_utils::raise::{self, RaiseContext};
+use rust_utils::raise::{self, RaiseContext, RaiseExt};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Instance {
+    // why do we need this? skip + default
     #[serde(skip, default = "InstanceName::placeholder")]
     pub name: InstanceName,
     #[serde(deserialize_with = "load_machine", serialize_with = "save_machine_name")]
@@ -73,8 +74,9 @@ impl Instance {
     }
 
     pub fn load_from_name(name: &str) -> Self {
-        let name = InstanceName::parse(name).unwrap_or_else(|error| raise::raise(error));
-        let mut instance = Self::load_from_path(&Storage::current().find_instance(name.as_str()));
+        let name = InstanceName::parse(name).raise();
+        let path = Storage::current().find_instance(name.as_str());
+        let mut instance = Self::deserialize_from_path(&path);
         instance.name = name;
         instance.validate_current_state();
         instance
@@ -86,7 +88,7 @@ impl Instance {
         FileWriter::from(path.to_path_buf()).write_new(contents.as_bytes());
     }
 
-    fn load_from_path(path: &Path) -> Self {
+    fn deserialize_from_path(path: &Path) -> Self {
         let contents = fs::read_to_string(path).raise_with_context(|| format!("reading {}", path.display()));
         toml::from_str(&contents).raise_with_context(|| format!("loading instance {}", path.display()))
     }
@@ -220,7 +222,7 @@ mod tests {
         )
         .unwrap();
 
-        let error = raised_message(|| Instance::load_from_path(&path));
+        let error = raised_message(|| Instance::deserialize_from_path(&path));
         assert!(error.contains("loading instance"));
         assert!(error.contains("machine"));
     }
@@ -237,7 +239,7 @@ mod tests {
         )
         .unwrap();
 
-        let error = raised_message(|| Instance::load_from_path(&path));
+        let error = raised_message(|| Instance::deserialize_from_path(&path));
         assert!(error.contains("loading instance"));
     }
 
@@ -246,7 +248,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("missing");
 
-        let error = raised_message(|| Instance::load_from_path(&path));
+        let error = raised_message(|| Instance::deserialize_from_path(&path));
         assert!(error.contains("reading"));
     }
 }

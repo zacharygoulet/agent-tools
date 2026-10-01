@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fs, path::Path};
 
 use crate::{Instance, InstanceName, MachineName, file_writer::FileWriter, storage::Storage};
-use rust_utils::raise::{self, RaiseContext};
+use rust_utils::raise::{self, RaiseContext, RaiseExt};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -72,13 +72,14 @@ impl Machine {
     }
 
     pub fn load_from_name(name: &str) -> Self {
-        let name = MachineName::parse(name).unwrap_or_else(|error| raise::raise(error));
-        Self::load_from_path(&Storage::current().find_machine(name.as_str()))
+        let name = MachineName::parse(name).raise();
+        let path = Storage::current().find_machine(name.as_str());
+        Self::parse_from_path(&path)
     }
 
     pub fn load_global_from_name(name: &str) -> Self {
-        let name = MachineName::parse(name).unwrap_or_else(|error| raise::raise(error));
-        Self::load_from_path(&Storage::current().find_global_machine(name.as_str()))
+        let name = MachineName::parse(name).raise();
+        Self::parse_from_path(&Storage::current().find_global_machine(name.as_str()))
     }
 
     pub fn ensure_global_definition(&self) {
@@ -89,7 +90,7 @@ impl Machine {
         let storage = Storage::current();
         let destination = storage.global_machine_path(self.name.as_str());
         if destination.exists() {
-            Self::load_from_path(&destination);
+            Self::parse_from_path(&destination);
             return;
         }
 
@@ -100,7 +101,7 @@ impl Machine {
         FileWriter::from(destination).write_new(contents.as_bytes());
     }
 
-    fn load_from_path(path: &Path) -> Self {
+    fn parse_from_path(path: &Path) -> Self {
         let contents = fs::read_to_string(path).raise_with_context(|| format!("reading {}", path.display()));
         Self::parse(path, &contents)
     }
@@ -113,7 +114,7 @@ impl Machine {
             .file_name()
             .and_then(|name| name.to_str())
             .expect("machine definition paths must have a UTF-8 filename");
-        let name = MachineName::parse(name).unwrap_or_else(|error| raise::raise(error));
+        let name = MachineName::parse(name).raise();
 
         let machine = Self { name, initial_state: definition.initial_state, states: definition.states };
         machine.validate_at(Some(path));
@@ -218,7 +219,7 @@ mod tests {
         )
         .unwrap();
 
-        let machine = Machine::load_from_path(&path);
+        let machine = Machine::parse_from_path(&path);
         assert_eq!(machine.name, "workflow");
         assert_eq!(machine.initial_state.0, "Design");
         assert_eq!(machine.states.len(), 2);
@@ -250,7 +251,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(raised_message(|| Machine::load_from_path(&path)).contains("initial_state"));
+        assert!(raised_message(|| Machine::parse_from_path(&path)).contains("initial_state"));
     }
 
     #[test]
@@ -282,7 +283,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(raised_message(|| Machine::load_from_path(&path)).contains("unknown field"));
+        assert!(raised_message(|| Machine::parse_from_path(&path)).contains("unknown field"));
     }
 
     #[test]
@@ -300,7 +301,7 @@ mod tests {
         )
         .unwrap();
 
-        let error = raised_message(|| Machine::load_from_path(&path));
+        let error = raised_message(|| Machine::parse_from_path(&path));
         assert!(error.contains("unknown next state"));
     }
 }
