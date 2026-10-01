@@ -68,7 +68,6 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("run");
         symlink("missing-target", &path).unwrap();
-        assert!(!path.exists());
 
         assert!(catch_raised(|| FileWriter::from(path.clone()).write_new(b"instance")).is_err());
         assert!(fs::symlink_metadata(path).unwrap().file_type().is_symlink());

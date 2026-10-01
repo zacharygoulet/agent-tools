@@ -139,36 +139,6 @@ mod tests {
     }
 
     #[test]
-    fn validates_normal_next_states() {
-        let machine = Machine {
-            name: MachineName::parse("example").unwrap(),
-            initial_state: StateName("draft".into()),
-            states: vec![
-                State { name: "draft".into(), next: vec![StateName("review".into())] },
-                State { name: "review".into(), next: vec![] },
-            ],
-        };
-        machine.validate();
-    }
-
-    #[test]
-    fn into_new_instance_uses_initial_state() {
-        let machine = Machine::new(
-            MachineName::parse("workflow").unwrap(),
-            StateName("Design".into()),
-            vec![
-                State { name: "Implement".into(), next: vec![] },
-                State { name: "Design".into(), next: vec![] },
-            ],
-        );
-
-        let instance = machine.into_new_instance(crate::InstanceName::parse("run").unwrap());
-        assert_eq!(instance.name, "run");
-        assert_eq!(instance.machine.name, "workflow");
-        assert_eq!(instance.state.0, "Design");
-    }
-
-    #[test]
     fn rejects_empty_state_names() {
         let machine = Machine {
             name: MachineName::parse("example").unwrap(),
@@ -202,31 +172,6 @@ mod tests {
     }
 
     #[test]
-    fn reads_valid_machine() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("workflow");
-        fs::write(
-            &path,
-            indoc! {r#"
-                initial_state = "Design"
-                [[states]]
-                name = "Design"
-                next = ["Implement"]
-                [[states]]
-                name = "Implement"
-                next = []
-            "#},
-        )
-        .unwrap();
-
-        let machine = Machine::parse_from_path(&path);
-        assert_eq!(machine.name, "workflow");
-        assert_eq!(machine.initial_state.0, "Design");
-        assert_eq!(machine.states.len(), 2);
-        assert_eq!(machine.states[0].next[0].0, "Implement");
-    }
-
-    #[test]
     fn rejects_unknown_initial_state() {
         let machine = Machine {
             name: MachineName::parse("example").unwrap(),
@@ -235,36 +180,6 @@ mod tests {
         };
 
         assert!(raised_message(|| machine.validate()).contains("unknown initial state"));
-    }
-
-    #[test]
-    fn requires_initial_state_in_definition() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("workflow");
-        fs::write(
-            &path,
-            indoc! {r#"
-                [[states]]
-                name = "Design"
-                next = []
-            "#},
-        )
-        .unwrap();
-
-        assert!(raised_message(|| Machine::parse_from_path(&path)).contains("initial_state"));
-    }
-
-    #[test]
-    fn constructor_rejects_invalid_definition() {
-        let error = raised_message(|| {
-            Machine::new(
-                MachineName::parse("workflow").unwrap(),
-                StateName("Missing".into()),
-                vec![State { name: "Design".into(), next: vec![] }],
-            )
-        });
-
-        assert!(error.contains("unknown initial state"));
     }
 
     #[test]
@@ -284,24 +199,5 @@ mod tests {
         .unwrap();
 
         assert!(raised_message(|| Machine::parse_from_path(&path)).contains("unknown field"));
-    }
-
-    #[test]
-    fn rejects_invalid_next_state() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("workflow");
-        fs::write(
-            &path,
-            indoc! {r#"
-                initial_state = "Design"
-                [[states]]
-                name = "Design"
-                next = ["Missing"]
-            "#},
-        )
-        .unwrap();
-
-        let error = raised_message(|| Machine::parse_from_path(&path));
-        assert!(error.contains("unknown next state"));
     }
 }

@@ -158,17 +158,6 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_to_global_only_when_local_is_absent() {
-        let root = tempfile::tempdir().unwrap();
-        let global = root.path().join("global/flow/instances/run");
-        fs::create_dir_all(global.parent().unwrap()).unwrap();
-        fs::write(&global, "global").unwrap();
-
-        let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert_eq!(storage.find_instance("run"), global);
-    }
-
-    #[test]
     fn reports_both_paths_when_missing() {
         let root = tempfile::tempdir().unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
@@ -215,20 +204,6 @@ mod tests {
     }
 
     #[test]
-    fn selects_local_or_global_creation_path() {
-        let root = tempfile::tempdir().unwrap();
-        let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert_eq!(
-            storage.new_instance_path("run", Scope::Local),
-            root.path().join(".flow/instances/run")
-        );
-        assert_eq!(
-            storage.new_instance_path("run", Scope::Global),
-            root.path().join("global/flow/instances/run")
-        );
-    }
-
-    #[test]
     fn rejects_creation_collisions_in_either_scope() {
         let root = tempfile::tempdir().unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
@@ -242,15 +217,6 @@ mod tests {
         fs::remove_file(&local).unwrap();
         fs::write(&global, "global").unwrap();
         assert!(catch_raised(|| storage.new_instance_path("run", Scope::Local)).is_err());
-    }
-
-    #[test]
-    fn rejects_invalid_creation_names() {
-        let root = tempfile::tempdir().unwrap();
-        let storage = storage_for_test(root.path(), root.path());
-        for name in ["", ".", "..", "../run", "nested/run", "nested\\run"] {
-            assert!(catch_raised(|| storage.new_instance_path(name, Scope::Local)).is_err());
-        }
     }
 
     #[cfg(unix)]

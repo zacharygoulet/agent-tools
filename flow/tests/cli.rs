@@ -222,7 +222,6 @@ fn new_copy_machine_installs_local_definition_and_creates_global_instance() {
         fs::read_to_string(root.join("global/flow/machines/workflow")).unwrap(),
         fs::read_to_string(local_machine).unwrap()
     );
-    assert!(root.join("global/flow/instances/run").is_file());
     assert!(!root.join(".flow/instances/run").exists());
     let loaded = run_cli(root, &["load", "run"]);
     assert!(

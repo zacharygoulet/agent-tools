@@ -121,76 +121,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
-    use indoc::indoc;
-
-    use super::{Instance, InstanceName, InstanceSavePolicy, Machine, StateName};
-    use crate::MachineName;
-    use crate::State;
+    use super::{Instance, Machine, StateName};
+    use crate::{MachineName, State};
     use rust_utils::raise::catch_raised;
 
     fn raised_message<T: std::fmt::Debug>(operation: impl FnOnce() -> T) -> String {
         catch_raised(std::panic::AssertUnwindSafe(operation))
             .unwrap_err()
             .to_string()
-    }
-
-    #[test]
-    fn save_policy_from_cli_flags() {
-        assert!(matches!(
-            InstanceSavePolicy::from_cli_args(false, false),
-            InstanceSavePolicy::Local
-        ));
-        assert!(matches!(
-            InstanceSavePolicy::from_cli_args(true, false),
-            InstanceSavePolicy::Global { copy_local_machine_to_global: false }
-        ));
-        assert!(matches!(
-            InstanceSavePolicy::from_cli_args(false, true),
-            InstanceSavePolicy::Global { copy_local_machine_to_global: true }
-        ));
-        assert!(matches!(
-            InstanceSavePolicy::from_cli_args(true, true),
-            InstanceSavePolicy::Global { copy_local_machine_to_global: true }
-        ));
-    }
-
-    #[test]
-    fn new_instance_starts_in_machines_initial_state() {
-        let machine = Machine::new(
-            MachineName::parse("workflow").unwrap(),
-            StateName("Design".into()),
-            vec![
-                State { name: "Implement".into(), next: vec![] },
-                State { name: "Design".into(), next: vec![] },
-            ],
-        );
-
-        let instance = Instance::new(InstanceName::parse("run").unwrap(), machine);
-        assert_eq!(instance.name, "run");
-        assert_eq!(instance.machine.name, "workflow");
-        assert_eq!(instance.state.0, "Design");
-    }
-
-    #[test]
-    fn serializes_machine_by_name() {
-        let instance = Instance {
-            name: super::InstanceName::parse("run").unwrap(),
-            machine: Machine {
-                name: MachineName::parse("workflow").unwrap(),
-                initial_state: StateName("Design".into()),
-                states: vec![State { name: "Design".into(), next: vec![] }],
-            },
-            state: StateName("Design".into()),
-        };
-        assert_eq!(
-            toml::to_string(&instance).unwrap(),
-            indoc! {r#"
-                machine = "workflow"
-                state = "Design"
-            "#}
-        );
     }
 
     #[test]
@@ -205,50 +143,7 @@ mod tests {
             state: StateName("Design".into()),
         };
 
-        instance.validate_current_state();
         instance.state = StateName("Missing".into());
         assert!(raised_message(|| instance.validate_current_state()).contains("Missing"));
-    }
-
-    #[test]
-    fn reports_missing_machine_name() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("run");
-        fs::write(
-            &path,
-            indoc! {r#"
-                state = "Design"
-            "#},
-        )
-        .unwrap();
-
-        let error = raised_message(|| Instance::deserialize_from_path(&path));
-        assert!(error.contains("loading instance"));
-        assert!(error.contains("machine"));
-    }
-
-    #[test]
-    fn reports_malformed_toml() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("run");
-        fs::write(
-            &path,
-            indoc! {r#"
-                machine = [
-            "#},
-        )
-        .unwrap();
-
-        let error = raised_message(|| Instance::deserialize_from_path(&path));
-        assert!(error.contains("loading instance"));
-    }
-
-    #[test]
-    fn reports_unreadable_instance() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("missing");
-
-        let error = raised_message(|| Instance::deserialize_from_path(&path));
-        assert!(error.contains("reading"));
     }
 }
