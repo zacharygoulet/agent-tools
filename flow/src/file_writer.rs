@@ -13,6 +13,18 @@ impl From<PathBuf> for FileWriter {
 
 impl FileWriter {
     pub fn write_new(&self, contents: &[u8]) {
+        self.temporary_file(contents)
+            .persist_noclobber(&self.0)
+            .raise_with_context(|| format!("creating file {} without overwriting", self.0.display()));
+    }
+
+    pub fn replace_existing(&self, contents: &[u8]) {
+        self.temporary_file(contents)
+            .persist(&self.0)
+            .raise_with_context(|| format!("replacing file {}", self.0.display()));
+    }
+
+    fn temporary_file(&self, contents: &[u8]) -> NamedTempFile {
         let directory = self
             .0
             .parent()
@@ -29,8 +41,6 @@ impl FileWriter {
             .sync_all()
             .raise_with_context(|| format!("syncing temporary file for {}", self.0.display()));
         temporary
-            .persist_noclobber(&self.0)
-            .raise_with_context(|| format!("creating file {} without overwriting", self.0.display()));
     }
 }
 
@@ -58,6 +68,17 @@ mod tests {
         assert!(catch_raised(|| writer.write_new(b"different")).is_err());
         assert_eq!(fs::read_to_string(&path).unwrap(), contents);
         assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn replaces_existing_file_without_leaving_a_temporary_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("run");
+        fs::write(&path, "old").unwrap();
+
+        FileWriter::from(path.clone()).replace_existing(b"new");
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new");
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
     }
 
     #[cfg(unix)]

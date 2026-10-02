@@ -1,5 +1,5 @@
 use clap::Parser;
-use flow::{Instance, InstanceName, InstanceSavePolicy, Machine, MachineName};
+use flow::{Instance, InstanceName, InstanceSavePolicy, Machine, MachineName, Move, StateName};
 use rust_utils::raise;
 
 #[derive(Parser)]
@@ -18,6 +18,14 @@ enum Cli {
     Load {
         instance_name: InstanceName,
     },
+    Next {
+        instance_name: InstanceName,
+        target: String,
+    },
+    Jump {
+        instance_name: InstanceName,
+        target: String,
+    },
 }
 
 #[rust_utils::raise_handler]
@@ -31,6 +39,8 @@ fn run(cli: Cli) {
             new(machine_name, instance_name, global, copy_machine)
         }
         Cli::Load { instance_name } => load(instance_name),
+        Cli::Next { instance_name, target } => move_instance(instance_name, Move::Next(StateName(target))),
+        Cli::Jump { instance_name, target } => move_instance(instance_name, Move::JumpTo(StateName(target))),
     }
 }
 
@@ -52,6 +62,15 @@ fn load(instance_name: InstanceName) {
         "instance: {}\nmachine: {}\nstate: {}",
         instance.name(),
         instance.machine().name(),
+        instance.state().0
+    );
+}
+
+fn move_instance(instance_name: InstanceName, movement: Move) {
+    let instance = Instance::apply_saved_move(instance_name.as_str(), movement);
+    println!(
+        "instance {} is now in state {}",
+        instance.name(),
         instance.state().0
     );
 }

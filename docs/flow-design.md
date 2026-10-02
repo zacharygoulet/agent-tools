@@ -13,12 +13,11 @@ integrating it with Pi.
   Each `State` lists zero or more normal `next` destinations.
   `Next(target)` chooses one of those destinations; `JumpTo(target)` is an
   explicit exceptional move to any defined state. `Instance::apply_move`
-  validates and applies these moves in memory; persistence and history are
-  not implemented.
+  changes an instance in memory; `Instance::apply_saved_move` reloads and
+  persists a named instance. Movement history is not recorded.
 - An `Instance` has one current state and owns its loaded `Machine` in
-  memory. The caller will propose moves for the engine to validate and
-  record. It does not execute workflow steps, prompt the user, run commands,
-  or
+  memory. The caller proposes moves for the engine to validate and apply.
+  It does not execute workflow steps, prompt the user, run commands, or
   advance automatically. `Machine::into_new_instance(name)` consumes a
   machine and creates an in-memory instance at its initial state.
 - Machine construction/loading rejects duplicate state names, an unknown
@@ -44,6 +43,8 @@ integrating it with Pi.
   gets its own name from its filename, not from a field inside the file.
 - `flow new <machine-name> [instance-name]` currently requires an explicit
   instance name. `flow load <instance-name>` uses no machine argument.
+  `flow next <instance-name> <state>` follows a listed transition;
+  `flow jump <instance-name> <state>` moves to any defined state.
   Explicit names cannot collide with instances visible in either scope.
   Generated names should eventually be machine-prefixed unique IDs; their
   exact format is undecided.
@@ -56,20 +57,25 @@ integrating it with Pi.
   might use. The instance still loads its machine local-first.
 - `Instance::save_new(InstanceSavePolicy)` resolves the destination, applies
   the global-machine requirement or copy option, then writes through a
-  temporary file with no-overwrite persistence. Files are short-lived CLI
-  storage, not a resident service. `Path::exists` treats dangling symlinks
-  as absent for lookup/prechecks, but the final write cannot overwrite one.
+  temporary file with no-overwrite persistence. Saved moves reload the
+  instance and atomically replace that same path after validation, without
+  recording history. Simultaneous writers are not coordinated and can lose
+  moves. The temporary file is synced, but a power loss could still lose the
+  rename. Files are short-lived CLI storage, not a resident service.
+  `Path::exists` treats dangling symlinks as absent for lookup/prechecks;
+  creation cannot overwrite one. Replacement replaces the path entry, even
+  if it is a symlink, not the symlink's target.
 
 ## Current state and next engine work
 
 The workspace contains the `flow` crate with `new` and `load`, validated
-machine definitions, in-memory movement, persistence for new instances,
-CLI tests, and a panic-catching `main`.
+machine definitions, in-memory and durable movement, CLI tests, and a
+panic-catching `main`.
 The temporary demonstration panic was removed when the crate moved here.
 The move and package rename passed formatting, Clippy, 49 tests, build,
 `--help`, and a `new`/`load` smoke test. A later test audit reduced overlap;
-36 tests now pass with in-memory movement. There is no durable movement or
-history, status reporting, context storage, Pi extension, or generated-name
+40 tests now pass with durable movement. There is no movement history,
+status reporting, context storage, Pi extension, or generated-name
 implementation yet.
 The old `.agent-sm` storage paths were renamed to `.flow`; other projects'
 old local files were not migrated automatically.
@@ -82,9 +88,8 @@ human-readable, but machine validation rejects empty/whitespace-only and
 duplicate state names. Moving CLI command handlers onto command types remains
 open. A second general style change was mentioned but not specified. Return to
 Design with Zach before implementing each new slice; test and review before
-moving to another. The next movement slice needs a design for durable updates
-and history, including failure and concurrent-write behavior. Other open
-questions include hold/cancel/resume, informational guidance, definition
+moving to another. History and concurrent-write behavior remain open design
+questions, along with hold/cancel/resume, informational guidance, definition
 versioning and remaining malformed-definition checks. Add a second small
 definition to verify that the engine remains generic.
 

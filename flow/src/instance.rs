@@ -111,18 +111,32 @@ impl Instance {
     }
 
     pub fn load_from_name(name: &str) -> Self {
+        Self::load_with_path(name).0
+    }
+
+    pub fn apply_saved_move(name: &str, movement: Move) -> Self {
+        let (mut instance, path) = Self::load_with_path(name);
+        instance.apply_move(movement);
+        let contents = instance.serialized_contents();
+        FileWriter::from(path).replace_existing(contents.as_bytes());
+        instance
+    }
+
+    fn load_with_path(name: &str) -> (Self, PathBuf) {
         let name = InstanceName::parse(name).raise();
         let path = Storage::current().find_instance(name.as_str());
         let mut instance = Self::deserialize_from_path(&path);
         instance.name = name;
         instance.validate_current_state();
-        instance
+        (instance, path)
     }
 
     fn save_to_path(&self, path: &Path) {
-        let contents =
-            toml::to_string(self).raise_with_context(|| format!("serializing instance {:?}", self.name));
-        FileWriter::from(path.to_path_buf()).write_new(contents.as_bytes());
+        FileWriter::from(path.to_path_buf()).write_new(self.serialized_contents().as_bytes());
+    }
+
+    fn serialized_contents(&self) -> String {
+        toml::to_string(self).raise_with_context(|| format!("serializing instance {:?}", self.name))
     }
 
     fn deserialize_from_path(path: &Path) -> Self {

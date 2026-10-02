@@ -58,6 +58,26 @@ fn write_machine(path: &Path) {
     .unwrap();
 }
 
+fn write_movable_machine(path: &Path) {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        path,
+        indoc! {r#"
+            initial_state = "Design"
+            [[states]]
+            name = "Design"
+            next = ["Review"]
+            [[states]]
+            name = "Review"
+            next = []
+            [[states]]
+            name = "Done"
+            next = []
+        "#},
+    )
+    .unwrap();
+}
+
 #[test]
 fn loads_instance_with_separate_machine_file() {
     let output = load_with_machine(Some(indoc! {r#"
@@ -133,6 +153,65 @@ fn new_creates_local_instance_that_can_be_loaded() {
         String::from_utf8_lossy(&loaded.stderr)
     );
     assert!(String::from_utf8_lossy(&loaded.stdout).contains("state: Design"));
+}
+
+#[test]
+fn next_and_jump_persist_local_instance_state() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_movable_machine(&root.join(".flow/machines/workflow"));
+    assert!(run_cli(root, &["new", "workflow", "run"]).status.success());
+
+    let next = run_cli(root, &["next", "run", "Review"]);
+    assert!(next.status.success(), "{}", String::from_utf8_lossy(&next.stderr));
+    let loaded = run_cli(root, &["load", "run"]);
+    assert!(loaded.status.success());
+    assert!(String::from_utf8_lossy(&loaded.stdout).contains("state: Review"));
+
+    let jump = run_cli(root, &["jump", "run", "Done"]);
+    assert!(jump.status.success(), "{}", String::from_utf8_lossy(&jump.stderr));
+    assert_eq!(
+        fs::read_to_string(root.join(".flow/instances/run")).unwrap(),
+        indoc! {r#"
+            machine = "workflow"
+            state = "Done"
+        "#}
+    );
+}
+
+#[test]
+fn rejected_moves_leave_instance_file_unchanged() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_movable_machine(&root.join(".flow/machines/workflow"));
+    assert!(run_cli(root, &["new", "workflow", "run"]).status.success());
+    let path = root.join(".flow/instances/run");
+    let original = fs::read_to_string(&path).unwrap();
+
+    let next = run_cli(root, &["next", "run", "Done"]);
+    assert!(!next.status.success());
+    assert!(String::from_utf8_lossy(&next.stderr).contains("cannot move next"));
+    let jump = run_cli(root, &["jump", "run", "Missing"]);
+    assert!(!jump.status.success());
+    assert!(String::from_utf8_lossy(&jump.stderr).contains("unknown state"));
+    assert_eq!(fs::read_to_string(path).unwrap(), original);
+}
+
+#[test]
+fn movement_updates_global_instance_without_creating_a_local_one() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_movable_machine(&root.join("global/flow/machines/workflow"));
+    assert!(run_cli(root, &["new", "workflow", "run", "-g"]).status.success());
+
+    let next = run_cli(root, &["next", "run", "Review"]);
+    assert!(next.status.success(), "{}", String::from_utf8_lossy(&next.stderr));
+    assert!(!root.join(".flow/instances/run").exists());
+    assert!(
+        fs::read_to_string(root.join("global/flow/instances/run"))
+            .unwrap()
+            .contains("state = \"Review\"")
+    );
 }
 
 #[test]

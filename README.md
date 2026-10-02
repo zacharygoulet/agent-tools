@@ -24,16 +24,22 @@ initial_state = "Design"
 
 [[states]]
 name = "Design"
+next = ["Review"]
+
+[[states]]
+name = "Review"
 next = []
 ```
 
-Then create and load an instance:
+Then create, move, and load an instance:
 
 ```sh
 cargo run -p flow -- new workflow run
+cargo run -p flow -- next run Review
 cargo run -p flow -- load run
 ```
 
+Use `jump` instead of `next` for an exceptional move to any defined state.
 Instances are stored in `.flow/instances/` by default. Use `new -g` for
 user-wide instance storage, or `new -G` to copy a missing local machine
 definition into global storage first.
