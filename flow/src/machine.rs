@@ -4,13 +4,14 @@ use crate::{Instance, InstanceName, MachineName, file_writer::FileWriter, storag
 use rust_utils::raise::{self, RaiseContext, RaiseExt};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, getset::Getters)]
 #[serde(deny_unknown_fields)]
+#[getset(get = "pub")]
 pub struct Machine {
     #[serde(skip, default = "MachineName::placeholder")]
-    pub name: MachineName,
-    pub initial_state: StateName,
-    pub states: Vec<State>,
+    name: MachineName,
+    initial_state: StateName,
+    states: Vec<State>,
     // Possibly: guidance for the whole machine or for entering/leaving states.
     // Possibly: names of expected context entries; context values belong to a run.
 }

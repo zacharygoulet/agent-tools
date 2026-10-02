@@ -42,7 +42,7 @@ fn new(machine_name: MachineName, instance_name: Option<InstanceName>, global: b
     let machine = Machine::load_from_name(machine_name.as_str());
     let instance = machine.into_new_instance(name);
     let path = instance.save_new(InstanceSavePolicy::from_cli_args(global, copy_machine));
-    println!("created instance {} at {}", instance.name, path.display());
+    println!("created instance {} at {}", instance.name(), path.display());
 }
 
 fn load(instance_name: InstanceName) {
@@ -50,6 +50,8 @@ fn load(instance_name: InstanceName) {
 
     println!(
         "instance: {}\nmachine: {}\nstate: {}",
-        instance.name, instance.machine.name, instance.state.0
+        instance.name(),
+        instance.machine().name(),
+        instance.state().0
     );
 }

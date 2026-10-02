@@ -11,14 +11,15 @@ use crate::{
 use rust_utils::raise::{self, RaiseContext, RaiseExt};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, getset::Getters)]
+#[getset(get = "pub")]
 pub struct Instance {
     // why do we need this? skip + default
     #[serde(skip, default = "InstanceName::placeholder")]
-    pub name: InstanceName,
+    name: InstanceName,
     #[serde(deserialize_with = "load_machine", serialize_with = "save_machine_name")]
-    pub machine: Machine,
-    pub state: StateName,
+    machine: Machine,
+    state: StateName,
     // Persistent context belongs to this run; its representation is undecided.
 }
 
@@ -62,38 +63,43 @@ impl InstanceSavePolicy {
 
 impl Instance {
     pub fn new(name: InstanceName, machine: Machine) -> Self {
-        let state = machine.initial_state.clone();
-        Self { name, machine, state }
+        machine.validate();
+        let state = machine.initial_state().clone();
+        let instance = Self { name, machine, state };
+        instance.validate_current_state();
+        instance
     }
 
     pub fn apply_move(&mut self, movement: Move) {
-        self.validate_current_state();
-
         let target = match movement {
             Move::Next(target) => {
                 let current = self
                     .machine
-                    .states
+                    .states()
                     .iter()
                     .find(|state| state.name == self.state.0)
                     .expect("current state was validated");
                 if !current.next.iter().any(|next| next.0 == target.0) {
                     raise::raise(format!(
                         "state {:?} cannot move next to {:?} in machine {:?}",
-                        self.state.0, target.0, self.machine.name
+                        self.state.0,
+                        target.0,
+                        self.machine.name()
                     ));
                 }
                 target
             }
-            Move::JumpTo(target) => target,
+            Move::JumpTo(target) => {
+                if !self.machine.states().iter().any(|state| state.name == target.0) {
+                    raise::raise(format!(
+                        "cannot move to unknown state {:?} in machine {:?}",
+                        target.0,
+                        self.machine.name()
+                    ));
+                }
+                target
+            }
         };
-
-        if !self.machine.states.iter().any(|state| state.name == target.0) {
-            raise::raise(format!(
-                "cannot move to unknown state {:?} in machine {:?}",
-                target.0, self.machine.name
-            ));
-        }
         self.state = target;
     }
 
@@ -125,10 +131,17 @@ impl Instance {
     }
 
     fn validate_current_state(&self) {
-        if !self.machine.states.iter().any(|state| state.name == self.state.0) {
+        if !self
+            .machine
+            .states()
+            .iter()
+            .any(|state| state.name == self.state.0)
+        {
             raise::raise(format!(
                 "instance {:?} refers to unknown state {:?} in machine {:?}",
-                self.name, self.state.0, self.machine.name
+                self.name,
+                self.state.0,
+                self.machine.name()
             ));
         }
     }
@@ -147,13 +160,14 @@ fn save_machine_name<S>(machine: &Machine, serializer: S) -> std::result::Result
 where
     S: Serializer,
 {
-    serializer.serialize_str(machine.name.as_str())
+    serializer.serialize_str(machine.name().as_str())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Instance, Machine, Move, StateName};
     use crate::{InstanceName, MachineName, State};
+    use indoc::indoc;
     use rust_utils::raise::catch_raised;
 
     fn raised_message<T: std::fmt::Debug>(operation: impl FnOnce() -> T) -> String {
@@ -208,17 +222,24 @@ mod tests {
     }
 
     #[test]
-    fn verifies_current_state_belongs_to_machine() {
-        let mut instance = Instance {
-            name: super::InstanceName::parse("run").unwrap(),
-            machine: Machine {
-                name: MachineName::parse("workflow").unwrap(),
-                initial_state: StateName("Design".into()),
-                states: vec![State { name: "Design".into(), next: vec![] }],
-            },
-            state: StateName("Design".into()),
-        };
+    fn constructor_rejects_invalid_machine() {
+        let machine: Machine = toml::from_str(indoc! {r#"
+            initial_state = "Missing"
+            [[states]]
+            name = "Design"
+            next = []
+        "#})
+        .unwrap();
 
+        assert!(
+            raised_message(|| Instance::new(InstanceName::parse("run").unwrap(), machine))
+                .contains("unknown initial state")
+        );
+    }
+
+    #[test]
+    fn verifies_current_state_belongs_to_machine() {
+        let mut instance = instance_with_transitions();
         instance.state = StateName("Missing".into());
         assert!(raised_message(|| instance.validate_current_state()).contains("Missing"));
     }

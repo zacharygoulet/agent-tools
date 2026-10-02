@@ -22,11 +22,11 @@ integrating it with Pi.
   advance automatically. `Machine::into_new_instance(name)` consumes a
   machine and creates an in-memory instance at its initial state.
 - Machine construction/loading rejects duplicate state names, an unknown
-  initial state, and unknown normal-next targets. Loading an instance checks
-  that its current state exists in the loaded machine. Public fields and
-  direct Serde deserialization can bypass some constructor validation.
-- Machine definitions are expected to remain unchanged while instances
-  use them, but immutability is not enforced.
+  initial state, and unknown normal-next targets. Instance construction
+  validates its machine; loading checks that the current state exists in the
+  loaded machine. Instance and machine fields are not publicly mutable, so
+  normal API use preserves these invariants between moves. Direct Serde
+  deserialization can still bypass constructor validation.
 - Persistent per-instance **context** is planned for facts callers need
   across steps. It informs callers but does not guard moves. Its shape and
   update interface remain undecided; expected context keys in definitions
@@ -68,7 +68,7 @@ CLI tests, and a panic-catching `main`.
 The temporary demonstration panic was removed when the crate moved here.
 The move and package rename passed formatting, Clippy, 49 tests, build,
 `--help`, and a `new`/`load` smoke test. A later test audit reduced overlap;
-35 tests now pass with in-memory movement. There is no durable movement or
+36 tests now pass with in-memory movement. There is no durable movement or
 history, status reporting, context storage, Pi extension, or generated-name
 implementation yet.
 The old `.agent-sm` storage paths were renamed to `.flow`; other projects'
