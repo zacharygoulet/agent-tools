@@ -12,8 +12,9 @@ integrating it with Pi.
 - `Machine` is a reusable definition with an `initial_state` and states.
   Each `State` lists zero or more normal `next` destinations.
   `Next(target)` chooses one of those destinations; `JumpTo(target)` is an
-  explicit exceptional move to any defined state. Movement is **not yet
-  implemented**.
+  explicit exceptional move to any defined state. `Instance::apply_move`
+  validates and applies these moves in memory; persistence and history are
+  not implemented.
 - An `Instance` has one current state and owns its loaded `Machine` in
   memory. The caller will propose moves for the engine to validate and
   record. It does not execute workflow steps, prompt the user, run commands,
@@ -62,11 +63,14 @@ integrating it with Pi.
 ## Current state and next engine work
 
 The workspace contains the `flow` crate with `new` and `load`, validated
-machine definitions, persistence, CLI tests, and a panic-catching `main`.
+machine definitions, in-memory movement, persistence for new instances,
+CLI tests, and a panic-catching `main`.
 The temporary demonstration panic was removed when the crate moved here.
 The move and package rename passed formatting, Clippy, 49 tests, build,
-`--help`, and a `new`/`load` smoke test. No movement logic, status reporting,
-context storage, Pi extension, or generated-name implementation exists yet.
+`--help`, and a `new`/`load` smoke test. A later test audit reduced overlap;
+35 tests now pass with in-memory movement. There is no durable movement or
+history, status reporting, context storage, Pi extension, or generated-name
+implementation yet.
 The old `.agent-sm` storage paths were renamed to `.flow`; other projects'
 old local files were not migrated automatically.
 
@@ -78,10 +82,11 @@ human-readable, but machine validation rejects empty/whitespace-only and
 duplicate state names. Moving CLI command handlers onto command types remains
 open. A second general style change was mentioned but not specified. Return to
 Design with Zach before implementing each new slice; test and review before
-moving to another. Other open design questions include movement/history,
-hold/cancel/resume, informational guidance, definition versioning and
-remaining malformed-definition checks. Add a second small definition to
-verify that the engine remains generic.
+moving to another. The next movement slice needs a design for durable updates
+and history, including failure and concurrent-write behavior. Other open
+questions include hold/cancel/resume, informational guidance, definition
+versioning and remaining malformed-definition checks. Add a second small
+definition to verify that the engine remains generic.
 
 ## Environment
 

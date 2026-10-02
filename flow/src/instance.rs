@@ -66,6 +66,37 @@ impl Instance {
         Self { name, machine, state }
     }
 
+    pub fn apply_move(&mut self, movement: Move) {
+        self.validate_current_state();
+
+        let target = match movement {
+            Move::Next(target) => {
+                let current = self
+                    .machine
+                    .states
+                    .iter()
+                    .find(|state| state.name == self.state.0)
+                    .expect("current state was validated");
+                if !current.next.iter().any(|next| next.0 == target.0) {
+                    raise::raise(format!(
+                        "state {:?} cannot move next to {:?} in machine {:?}",
+                        self.state.0, target.0, self.machine.name
+                    ));
+                }
+                target
+            }
+            Move::JumpTo(target) => target,
+        };
+
+        if !self.machine.states.iter().any(|state| state.name == target.0) {
+            raise::raise(format!(
+                "cannot move to unknown state {:?} in machine {:?}",
+                target.0, self.machine.name
+            ));
+        }
+        self.state = target;
+    }
+
     pub fn save_new(&self, policy: InstanceSavePolicy) -> PathBuf {
         let path = Storage::current().new_instance_path(self.name.as_str(), policy.scope());
         policy.prepare_machine(&self.machine);
@@ -121,14 +152,59 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{Instance, Machine, StateName};
-    use crate::{MachineName, State};
+    use super::{Instance, Machine, Move, StateName};
+    use crate::{InstanceName, MachineName, State};
     use rust_utils::raise::catch_raised;
 
     fn raised_message<T: std::fmt::Debug>(operation: impl FnOnce() -> T) -> String {
         catch_raised(std::panic::AssertUnwindSafe(operation))
             .unwrap_err()
             .to_string()
+    }
+
+    fn instance_with_transitions() -> Instance {
+        Instance::new(
+            InstanceName::parse("run").unwrap(),
+            Machine::new(
+                MachineName::parse("workflow").unwrap(),
+                StateName("Draft".into()),
+                vec![
+                    State { name: "Draft".into(), next: vec![StateName("Review".into())] },
+                    State { name: "Review".into(), next: vec![] },
+                    State { name: "Done".into(), next: vec![] },
+                ],
+            ),
+        )
+    }
+
+    #[test]
+    fn next_follows_a_listed_transition() {
+        let mut instance = instance_with_transitions();
+        instance.apply_move(Move::Next(StateName("Review".into())));
+        assert_eq!(instance.state.0, "Review");
+    }
+
+    #[test]
+    fn next_rejects_an_unlisted_transition_without_changing_state() {
+        let mut instance = instance_with_transitions();
+        let error = raised_message(|| instance.apply_move(Move::Next(StateName("Done".into()))));
+        assert!(error.contains("cannot move next"));
+        assert_eq!(instance.state.0, "Draft");
+    }
+
+    #[test]
+    fn jump_can_bypass_listed_transitions() {
+        let mut instance = instance_with_transitions();
+        instance.apply_move(Move::JumpTo(StateName("Done".into())));
+        assert_eq!(instance.state.0, "Done");
+    }
+
+    #[test]
+    fn jump_rejects_unknown_state_without_changing_state() {
+        let mut instance = instance_with_transitions();
+        let error = raised_message(|| instance.apply_move(Move::JumpTo(StateName("Missing".into()))));
+        assert!(error.contains("unknown state"));
+        assert_eq!(instance.state.0, "Draft");
     }
 
     #[test]
