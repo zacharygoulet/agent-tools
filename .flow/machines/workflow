@@ -1,12 +1,36 @@
-initial_state = "Draft"
+initial_state = "Select"
 
 [[states]]
-name = "Draft"
-next = ["Review"]
+name = "Select"
+next = ["Define"]
 
 [[states]]
-name = "Review"
-next = ["Done"]
+name = "Define"
+next = ["Design"]
 
 [[states]]
-name = "Done"
+name = "Design"
+next = ["Implement", "Define"]
+
+[[states]]
+name = "Implement"
+next = ["Test", "Design"]
+
+[[states]]
+name = "Test"
+next = ["Improve and Clean", "Finalize", "Implement"]
+
+[[states]]
+name = "Improve and Clean"
+next = ["Test", "Implement"]
+
+[[states]]
+name = "Finalize"
+next = ["Future Work", "Test"]
+
+[[states]]
+name = "Future Work"
+next = ["Self Improve"]
+
+[[states]]
+name = "Self Improve"
