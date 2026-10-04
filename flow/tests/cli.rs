@@ -24,7 +24,7 @@ fn load_with_machine(machine_definition: Option<&str>) -> Output {
         fs::write(root.join(".flow/machines/workflow"), contents).unwrap();
     }
 
-    run_cli(root, &["load", "run"])
+    run_cli(root, &["status", "run"])
 }
 
 fn run_cli(root: &Path, args: &[&str]) -> Output {
@@ -146,13 +146,69 @@ fn new_creates_local_instance_that_can_be_loaded() {
         "#}
     );
 
-    let loaded = run_cli(root, &["load", "run"]);
+    let loaded = run_cli(root, &["status", "run"]);
     assert!(
         loaded.status.success(),
         "{}",
         String::from_utf8_lossy(&loaded.stderr)
     );
     assert!(String::from_utf8_lossy(&loaded.stdout).contains("state: Design"));
+}
+
+#[test]
+fn status_lists_local_and_global_instances_in_name_order() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_local_machine(root);
+    write_global_machine(root);
+    assert!(run_cli(root, &["new", "workflow", "local-run"]).status.success());
+    assert!(
+        run_cli(root, &["new", "workflow", "global-run", "-g"])
+            .status
+            .success()
+    );
+
+    let status = run_cli(root, &["status"]);
+    assert!(
+        status.status.success(),
+        "{}",
+        String::from_utf8_lossy(&status.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&status.stdout),
+        "instance | machine | state\nglobal-run | workflow | Design\nlocal-run | workflow | Design\n"
+    );
+}
+
+#[test]
+fn status_for_one_instance_reports_its_current_details() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_local_machine(root);
+    assert!(run_cli(root, &["new", "workflow", "run"]).status.success());
+
+    let status = run_cli(root, &["status", "run"]);
+    assert!(
+        status.status.success(),
+        "{}",
+        String::from_utf8_lossy(&status.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&status.stdout),
+        "instance: run\nmachine: workflow\nstate: Design\n"
+    );
+}
+
+#[test]
+fn status_reports_when_no_instances_exist() {
+    let directory = tempfile::tempdir().unwrap();
+    let status = run_cli(directory.path(), &["status"]);
+    assert!(
+        status.status.success(),
+        "{}",
+        String::from_utf8_lossy(&status.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&status.stdout), "no instances found\n");
 }
 
 #[test]
@@ -164,7 +220,7 @@ fn next_and_jump_persist_local_instance_state() {
 
     let next = run_cli(root, &["next", "run", "Review"]);
     assert!(next.status.success(), "{}", String::from_utf8_lossy(&next.stderr));
-    let loaded = run_cli(root, &["load", "run"]);
+    let loaded = run_cli(root, &["status", "run"]);
     assert!(loaded.status.success());
     assert!(String::from_utf8_lossy(&loaded.stdout).contains("state: Review"));
 
@@ -269,7 +325,7 @@ fn new_generates_machine_prefixed_instance_name_that_can_be_loaded() {
     );
     assert!(root.join(".flow/instances").join(name).is_file());
 
-    let loaded = run_cli(root, &["load", name]);
+    let loaded = run_cli(root, &["status", name]);
     assert!(
         loaded.status.success(),
         "{}",
@@ -298,7 +354,7 @@ fn new_global_creates_instance_with_global_machine() {
         "#}
     );
     assert!(!root.join(".flow/instances/run").exists());
-    let loaded = run_cli(root, &["load", "run"]);
+    let loaded = run_cli(root, &["status", "run"]);
     assert!(
         loaded.status.success(),
         "{}",
@@ -325,7 +381,7 @@ fn new_copy_machine_installs_local_definition_and_creates_global_instance() {
         fs::read_to_string(local_machine).unwrap()
     );
     assert!(!root.join(".flow/instances/run").exists());
-    let loaded = run_cli(root, &["load", "run"]);
+    let loaded = run_cli(root, &["status", "run"]);
     assert!(
         loaded.status.success(),
         "{}",

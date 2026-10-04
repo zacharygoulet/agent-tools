@@ -114,6 +114,14 @@ impl Instance {
         Self::load_with_path(name).0
     }
 
+    pub fn load_all() -> Vec<Self> {
+        Storage::current()
+            .instance_names()
+            .iter()
+            .map(|name| Self::load_from_name(name.as_str()))
+            .collect()
+    }
+
     pub fn apply_saved_move(name: &str, movement: Move) -> Self {
         let (mut instance, path) = Self::load_with_path(name);
         instance.apply_move(movement);

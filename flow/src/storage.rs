@@ -1,6 +1,8 @@
-use std::{env, path::PathBuf};
+use std::{collections::BTreeSet, env, fs, path::PathBuf};
 
 use rust_utils::raise::{self, RaiseContext};
+
+use crate::InstanceName;
 
 #[derive(Clone, Copy, Debug)]
 enum StorageFile {
@@ -80,6 +82,33 @@ impl Storage {
 
     pub fn global_machine_path(&self, name: &str) -> PathBuf {
         self.path(name, StorageFile::Machine, Scope::Global)
+    }
+
+    pub fn instance_names(&self) -> Vec<InstanceName> {
+        let mut names = BTreeSet::new();
+        for directory in [
+            self.local.join(StorageFile::Instance.directory()),
+            self.global.join(StorageFile::Instance.directory()),
+        ] {
+            if !directory.exists() {
+                continue;
+            }
+            let entries = fs::read_dir(&directory).expect("failed to read instance directory");
+            for entry in entries {
+                let entry = entry.expect("failed to read instance directory entry");
+                if !entry.path().is_file() {
+                    continue;
+                }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                InstanceName::parse(name.clone())
+                    .raise_with_context(|| format!("invalid instance filename in {}", directory.display()));
+                names.insert(name);
+            }
+        }
+        names
+            .into_iter()
+            .map(|name| InstanceName::parse(name).expect("instance names were validated"))
+            .collect()
     }
 
     pub fn new_instance_path(&self, name: &str, scope: Scope) -> PathBuf {

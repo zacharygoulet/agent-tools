@@ -16,8 +16,8 @@ enum Cli {
         copy_machine: bool,
     },
 
-    Load {
-        instance_name: InstanceName,
+    Status {
+        instance_name: Option<InstanceName>,
     },
     Next {
         instance_name: InstanceName,
@@ -39,7 +39,8 @@ fn run(cli: Cli) {
         Cli::New { machine_name, instance_name, global, copy_machine } => {
             new(machine_name, instance_name, global, copy_machine)
         }
-        Cli::Load { instance_name } => load(instance_name),
+        Cli::Status { instance_name: Some(instance_name) } => status_instance(instance_name),
+        Cli::Status { instance_name: None } => status_all(),
         Cli::Next { instance_name, target } => move_instance(instance_name, Move::Next(StateName(target))),
         Cli::Jump { instance_name, target } => move_instance(instance_name, Move::JumpTo(StateName(target))),
     }
@@ -56,7 +57,7 @@ fn new(machine_name: MachineName, instance_name: Option<InstanceName>, global: b
     println!("created instance {} at {}", instance.name(), path.display());
 }
 
-fn load(instance_name: InstanceName) {
+fn status_instance(instance_name: InstanceName) {
     let instance = Instance::load_from_name(instance_name.as_str());
 
     println!(
@@ -65,6 +66,24 @@ fn load(instance_name: InstanceName) {
         instance.machine().name(),
         instance.state().0
     );
+}
+
+fn status_all() {
+    let instances = Instance::load_all();
+    if instances.is_empty() {
+        println!("no instances found");
+        return;
+    }
+
+    println!("instance | machine | state");
+    for instance in instances {
+        println!(
+            "{} | {} | {}",
+            instance.name(),
+            instance.machine().name(),
+            instance.state().0
+        );
+    }
 }
 
 fn move_instance(instance_name: InstanceName, movement: Move) {

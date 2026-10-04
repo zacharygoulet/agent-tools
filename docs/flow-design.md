@@ -43,7 +43,10 @@ integrating it with Pi.
   gets its own name from its filename, not from a field inside the file.
 - `flow new <machine-name> [instance-name]` accepts an optional instance name.
   When omitted, it generates `<machine-name>-<32-hex-digit-UUID>`.
-  `flow load <instance-name>` uses no machine argument.
+  `flow status` lists stored instances with their machine and state;
+  `flow status [instance-name]` reports the known details for one instance.
+  reports the known details for one instance. Local instances shadow same-named
+  global instances in the listing, matching lookup behavior.
   `flow next <instance-name> <state>` follows a listed transition;
   `flow jump <instance-name> <state>` moves to any defined state.
   Explicit names cannot collide with instances visible in either scope.
@@ -69,15 +72,15 @@ integrating it with Pi.
 
 ## Current state and next engine work
 
-The workspace contains the `flow` crate with `new` and `load`, validated
+The workspace contains the `flow` crate with `new` and `status`, validated
 machine definitions, in-memory and durable movement, CLI tests, and a
 panic-catching `main`.
 The temporary demonstration panic was removed when the crate moved here.
 The move and package rename passed formatting, Clippy, 49 tests, build,
-`--help`, and a `new`/`load` smoke test. A later test audit reduced overlap;
-40 tests now pass with durable movement. There is no movement history, status
-reporting, context storage, or Pi extension yet. Generated instance names use
-machine-prefixed random UUIDs.
+`--help`, and a `new`/`status` smoke test. A later test audit reduced overlap;
+40 tests now pass with durable movement. There is no movement history,
+additional per-instance status reporting, context storage, or Pi extension yet.
+Generated instance names use machine-prefixed random UUIDs.
 The old `.agent-sm` storage paths were renamed to `.flow`; other projects'
 old local files were not migrated automatically.
 
@@ -89,8 +92,9 @@ human-readable, but machine validation rejects empty/whitespace-only and
 duplicate state names. Moving CLI command handlers onto command types remains
 open. A second general style change was mentioned but not specified. Return to
 Design with Zach before implementing each new slice; test and review before
-moving to another. History and concurrent-write behavior remain open design
-questions, along with hold/cancel/resume, informational guidance, definition
+moving to another. Defining additional per-instance status details is future
+work. History and concurrent-write behavior remain open design questions,
+along with hold/cancel/resume, informational guidance, definition
 versioning and remaining malformed-definition checks. Add a second small
 definition to verify that the engine remains generic.
 
@@ -106,4 +110,4 @@ cargo run -p flow -- --help
 ```
 
 The code is on branch `task/0034-scriptify-the-workflow` in this repository.
-See the workspace [README](../README.md) for a minimal `new`/`load` example.
+See the workspace [README](../README.md) for a minimal `new`/`status` example.

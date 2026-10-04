@@ -31,12 +31,13 @@ name = "Review"
 next = []
 ```
 
-Then create, move, and load an instance:
+Then create, move, and inspect an instance:
 
 ```sh
 cargo run -p flow -- new workflow run
 cargo run -p flow -- next run Review
-cargo run -p flow -- load run
+cargo run -p flow -- status
+cargo run -p flow -- status run
 ```
 
 Use `jump` instead of `next` for an exceptional move to any defined state.
