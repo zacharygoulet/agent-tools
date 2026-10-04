@@ -18,12 +18,6 @@ enum Cli {
         copy_machine: bool,
     },
 
-    NewMachineFromTemplate {
-        machine_name: MachineName,
-        #[arg(short, long)]
-        global: bool,
-    },
-
     Next {
         instance_name: InstanceName,
         target: String,
@@ -37,6 +31,13 @@ enum Cli {
     Status {
         instance_name: Option<InstanceName>,
     },
+
+    NewMachineFromTemplate {
+        machine_name: MachineName,
+        #[arg(short, long)]
+        global: bool,
+    },
+
 }
 
 #[rust_utils::raise_handler]
