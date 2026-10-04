@@ -1,6 +1,7 @@
 use clap::Parser;
 use flow::{Instance, InstanceName, InstanceSavePolicy, Machine, MachineName, Move, StateName};
-use rust_utils::raise;
+use rust_utils::raise::RaiseExt;
+use uuid::Uuid;
 
 #[derive(Parser)]
 enum Cli {
@@ -45,9 +46,9 @@ fn run(cli: Cli) {
 }
 
 fn new(machine_name: MachineName, instance_name: Option<InstanceName>, global: bool, copy_machine: bool) {
-    let Some(name) = instance_name else {
-        raise::raise("automatic instance naming is not implemented yet");
-    };
+    let name = instance_name.unwrap_or_else(|| {
+        InstanceName::parse(format!("{}-{}", machine_name, Uuid::new_v4().simple())).raise()
+    });
 
     let machine = Machine::load_from_name(machine_name.as_str());
     let instance = machine.into_new_instance(name);

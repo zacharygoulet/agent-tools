@@ -41,13 +41,14 @@ integrating it with Pi.
 - Machine TOML contains `initial_state` and `[[states]]` entries with `name`
   and `next`. Instance TOML contains only `machine` and `state`. Each file
   gets its own name from its filename, not from a field inside the file.
-- `flow new <machine-name> [instance-name]` currently requires an explicit
-  instance name. `flow load <instance-name>` uses no machine argument.
+- `flow new <machine-name> [instance-name]` accepts an optional instance name.
+  When omitted, it generates `<machine-name>-<32-hex-digit-UUID>`.
+  `flow load <instance-name>` uses no machine argument.
   `flow next <instance-name> <state>` follows a listed transition;
   `flow jump <instance-name> <state>` moves to any defined state.
   Explicit names cannot collide with instances visible in either scope.
-  Generated names should eventually be machine-prefixed unique IDs; their
-  exact format is undecided.
+  Generated names are machine-prefixed random UUIDs. UUID collisions are
+  negligibly likely; persistence still uses no-overwrite creation.
 - `new -g` stores the instance globally and requires a valid global machine
   definition. `new -G` implies global storage and copies a valid local
   machine definition if the global one is absent. It never replaces an
@@ -74,9 +75,9 @@ panic-catching `main`.
 The temporary demonstration panic was removed when the crate moved here.
 The move and package rename passed formatting, Clippy, 49 tests, build,
 `--help`, and a `new`/`load` smoke test. A later test audit reduced overlap;
-40 tests now pass with durable movement. There is no movement history,
-status reporting, context storage, Pi extension, or generated-name
-implementation yet.
+40 tests now pass with durable movement. There is no movement history, status
+reporting, context storage, or Pi extension yet. Generated instance names use
+machine-prefixed random UUIDs.
 The old `.agent-sm` storage paths were renamed to `.flow`; other projects'
 old local files were not migrated automatically.
 

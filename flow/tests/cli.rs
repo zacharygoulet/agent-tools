@@ -242,17 +242,40 @@ fn new_requires_machine_before_creating_instance_file() {
 }
 
 #[test]
-fn new_does_not_implement_generated_names_yet() {
+fn new_generates_machine_prefixed_instance_name_that_can_be_loaded() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     write_local_machine(root);
 
-    let unnamed = run_cli(root, &["new", "workflow"]);
-    assert!(!unnamed.status.success());
+    let created = run_cli(root, &["new", "workflow"]);
     assert!(
-        String::from_utf8_lossy(&unnamed.stderr).contains("automatic instance naming is not implemented")
+        created.status.success(),
+        "{}",
+        String::from_utf8_lossy(&created.stderr)
     );
-    assert!(!root.join(".flow/instances").exists());
+    let output = String::from_utf8_lossy(&created.stdout);
+    let name = output
+        .strip_prefix("created instance ")
+        .unwrap()
+        .split_once(" at ")
+        .unwrap()
+        .0;
+    let generated_id = name.strip_prefix("workflow-").unwrap();
+    assert_eq!(generated_id.len(), 32);
+    assert!(
+        generated_id
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+    );
+    assert!(root.join(".flow/instances").join(name).is_file());
+
+    let loaded = run_cli(root, &["load", name]);
+    assert!(
+        loaded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&loaded.stderr)
+    );
+    assert!(String::from_utf8_lossy(&loaded.stdout).contains(&format!("instance: {name}")));
 }
 
 #[test]
