@@ -1,6 +1,14 @@
-use std::{collections::HashSet, fs, path::Path};
+use std::{
+    collections::HashSet,
+    fs,
+    path::{Path, PathBuf},
+};
 
-use crate::{Instance, InstanceName, MachineName, file_writer::FileWriter, storage::Storage};
+use crate::{
+    Instance, InstanceName, MachineName,
+    file_writer::FileWriter,
+    storage::{Scope, Storage},
+};
 use rust_utils::raise::{self, RaiseContext, RaiseExt};
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +27,7 @@ pub struct Machine {
 #[derive(Debug, Deserialize)]
 pub struct State {
     pub name: String,
+    #[serde(default)]
     pub next: Vec<StateName>,
     // Possibly: informational guidance for this state.
 }
@@ -70,6 +79,13 @@ impl Machine {
                 }
             }
         }
+    }
+
+    pub fn create_from_template(name: MachineName, contents: &str, scope: Scope) -> PathBuf {
+        let path = Storage::current().new_machine_path(name.as_str(), scope);
+        Self::parse(&path, contents);
+        FileWriter::from(path.clone()).write_new(contents.as_bytes());
+        path
     }
 
     pub fn load_from_name(name: &str) -> Self {
@@ -137,6 +153,14 @@ mod tests {
         catch_raised(std::panic::AssertUnwindSafe(operation))
             .unwrap_err()
             .to_string()
+    }
+
+    #[test]
+    fn missing_next_defaults_to_no_transitions() {
+        let machine: Machine =
+            toml::from_str("initial_state = \"Done\"\n\n[[states]]\nname = \"Done\"\n").unwrap();
+        machine.validate();
+        assert!(machine.states()[0].next.is_empty());
     }
 
     #[test]

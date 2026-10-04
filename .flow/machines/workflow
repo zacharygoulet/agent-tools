@@ -1,0 +1,12 @@
+initial_state = "Draft"
+
+[[states]]
+name = "Draft"
+next = ["Review"]
+
+[[states]]
+name = "Review"
+next = ["Done"]
+
+[[states]]
+name = "Done"

@@ -1,11 +1,13 @@
 use clap::Parser;
-use flow::{Instance, InstanceName, InstanceSavePolicy, Machine, MachineName, Move, StateName};
+use flow::{Instance, InstanceName, InstanceSavePolicy, Machine, MachineName, Move, Scope, StateName};
 use rust_utils::raise::RaiseExt;
 use uuid::Uuid;
 
+const MACHINE_TEMPLATE: &str = include_str!("../templates/machine.toml");
+
 #[derive(Parser)]
 enum Cli {
-    New {
+    Start {
         machine_name: MachineName,
         instance_name: Option<InstanceName>,
         /// Save globally, requiring an existing global machine definition.
@@ -16,6 +18,11 @@ enum Cli {
         copy_machine: bool,
     },
 
+    NewMachineFromTemplate {
+        machine_name: MachineName,
+        #[arg(short, long)]
+        global: bool,
+    },
 
     Next {
         instance_name: InstanceName,
@@ -39,8 +46,11 @@ fn main() {
 
 fn run(cli: Cli) {
     match cli {
-        Cli::New { machine_name, instance_name, global, copy_machine } => {
-            new(machine_name, instance_name, global, copy_machine)
+        Cli::Start { machine_name, instance_name, global, copy_machine } => {
+            start(machine_name, instance_name, global, copy_machine)
+        }
+        Cli::NewMachineFromTemplate { machine_name, global } => {
+            create_machine_from_template(machine_name, global)
         }
         Cli::Status { instance_name: Some(instance_name) } => status_instance(instance_name),
         Cli::Status { instance_name: None } => status_all(),
@@ -49,7 +59,7 @@ fn run(cli: Cli) {
     }
 }
 
-fn new(machine_name: MachineName, instance_name: Option<InstanceName>, global: bool, copy_machine: bool) {
+fn start(machine_name: MachineName, instance_name: Option<InstanceName>, global: bool, copy_machine: bool) {
     let name = instance_name.unwrap_or_else(|| {
         InstanceName::parse(format!("{}-{}", machine_name, Uuid::new_v4().simple())).raise()
     });
@@ -58,6 +68,12 @@ fn new(machine_name: MachineName, instance_name: Option<InstanceName>, global: b
     let instance = machine.into_new_instance(name);
     let path = instance.save_new(InstanceSavePolicy::from_cli_args(global, copy_machine));
     println!("created instance {} at {}", instance.name(), path.display());
+}
+
+fn create_machine_from_template(machine_name: MachineName, global: bool) {
+    let scope = if global { Scope::Global } else { Scope::Local };
+    let path = Machine::create_from_template(machine_name.clone(), MACHINE_TEMPLATE, scope);
+    println!("created machine {} at {}", machine_name, path.display());
 }
 
 fn status_instance(instance_name: InstanceName) {

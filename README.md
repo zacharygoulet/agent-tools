@@ -17,30 +17,25 @@ cargo run -p flow -- --help
 
 Machines live in `.flow/machines/` or
 `$XDG_STATE_HOME/flow/machines/` (default `~/.local/state/flow/machines/`).
-For example, create `.flow/machines/workflow`:
+Create a machine from the bundled three-state template, then edit
+`.flow/machines/workflow` as needed:
 
-```toml
-initial_state = "Design"
-
-[[states]]
-name = "Design"
-next = ["Review"]
-
-[[states]]
-name = "Review"
-next = []
+```sh
+cargo run -p flow -- new-machine-from-template workflow
 ```
 
 Then create, move, and inspect an instance:
 
 ```sh
-cargo run -p flow -- new workflow run
+cargo run -p flow -- start workflow run
 cargo run -p flow -- next run Review
+cargo run -p flow -- next run Done
 cargo run -p flow -- status
 cargo run -p flow -- status run
 ```
 
 Use `jump` instead of `next` for an exceptional move to any defined state.
-Instances are stored in `.flow/instances/` by default. Use `new -g` for
-user-wide instance storage, or `new -G` to copy a missing local machine
-definition into global storage first.
+Instances are stored in `.flow/instances/` by default. Use `start -g` for
+user-wide instance storage, or `start -G` to copy a missing local machine
+definition into global storage first. Add `-g` to
+`new-machine-from-template` to create a global machine definition.

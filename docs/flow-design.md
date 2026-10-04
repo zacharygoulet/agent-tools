@@ -41,19 +41,24 @@ integrating it with Pi.
 - Machine TOML contains `initial_state` and `[[states]]` entries with `name`
   and `next`. Instance TOML contains only `machine` and `state`. Each file
   gets its own name from its filename, not from a field inside the file.
-- `flow new <machine-name> [instance-name]` accepts an optional instance name.
-  When omitted, it generates `<machine-name>-<32-hex-digit-UUID>`.
+- `flow start <machine-name> [instance-name]` creates an instance and accepts
+  an optional instance name. When omitted, it generates
+  `<machine-name>-<32-hex-digit-UUID>`.
+  `flow new-machine-from-template <machine-name> [-g]` creates a machine
+  definition from `flow/templates/machine.toml`, locally by default or
+  globally with `-g`. It does not overwrite an existing definition in the
+  destination scope.
   `flow status` lists stored instances with their machine and state;
   `flow status [instance-name]` reports the known details for one instance.
-  reports the known details for one instance. Local instances shadow same-named
+  Local instances shadow same-named
   global instances in the listing, matching lookup behavior.
   `flow next <instance-name> <state>` follows a listed transition;
   `flow jump <instance-name> <state>` moves to any defined state.
   Explicit names cannot collide with instances visible in either scope.
   Generated names are machine-prefixed random UUIDs. UUID collisions are
   negligibly likely; persistence still uses no-overwrite creation.
-- `new -g` stores the instance globally and requires a valid global machine
-  definition. `new -G` implies global storage and copies a valid local
+- `start -g` stores the instance globally and requires a valid global machine
+  definition. `start -G` implies global storage and copies a valid local
   machine definition if the global one is absent. It never replaces an
   existing global definition. Instance-name collisions are checked before
   copying; if instance creation later fails, an installed machine is left
@@ -72,13 +77,12 @@ integrating it with Pi.
 
 ## Current state and next engine work
 
-The workspace contains the `flow` crate with `new` and `status`, validated
-machine definitions, in-memory and durable movement, CLI tests, and a
-panic-catching `main`.
+The workspace contains the `flow` crate with `start`,
+`new-machine-from-template`, and `status`; validated machine definitions;
+in-memory and durable movement; CLI tests; and a panic-catching `main`.
 The temporary demonstration panic was removed when the crate moved here.
-The move and package rename passed formatting, Clippy, 49 tests, build,
-`--help`, and a `new`/`status` smoke test. A later test audit reduced overlap;
-40 tests now pass with durable movement. There is no movement history,
+Current verification passes formatting, Clippy, 45 tests, and CLI help plus
+machine-template and start/status smoke tests. There is no movement history,
 additional per-instance status reporting, context storage, or Pi extension yet.
 Generated instance names use machine-prefixed random UUIDs.
 The old `.agent-sm` storage paths were renamed to `.flow`; other projects'
@@ -110,4 +114,5 @@ cargo run -p flow -- --help
 ```
 
 The code is on branch `task/0034-scriptify-the-workflow` in this repository.
-See the workspace [README](../README.md) for a minimal `new`/`status` example.
+See the workspace [README](../README.md) for machine-template and
+`start`/`status` examples.

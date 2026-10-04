@@ -84,6 +84,14 @@ impl Storage {
         self.path(name, StorageFile::Machine, Scope::Global)
     }
 
+    pub fn new_machine_path(&self, name: &str, scope: Scope) -> PathBuf {
+        let path = self.path(name, StorageFile::Machine, scope);
+        if path.exists() {
+            raise::raise(format!("machine {name:?} already exists at {}", path.display()));
+        }
+        path
+    }
+
     pub fn instance_names(&self) -> Vec<InstanceName> {
         let mut names = BTreeSet::new();
         for directory in [
