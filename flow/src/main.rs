@@ -16,16 +16,19 @@ enum Cli {
         copy_machine: bool,
     },
 
-    Status {
-        instance_name: Option<InstanceName>,
-    },
+
     Next {
         instance_name: InstanceName,
         target: String,
     },
+
     Jump {
         instance_name: InstanceName,
         target: String,
+    },
+
+    Status {
+        instance_name: Option<InstanceName>,
     },
 }
 
