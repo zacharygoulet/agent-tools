@@ -20,8 +20,14 @@ pub struct Machine {
     name: MachineName,
     initial_state: StateName,
     states: Vec<State>,
-    // Possibly: guidance for the whole machine or for entering/leaving states.
-    // Possibly: names of expected context entries; context values belong to a run.
+    #[serde(default)]
+    summary: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    required_steps: Vec<String>,
+    #[serde(default)]
+    contextual_steps: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -29,7 +35,14 @@ pub struct State {
     pub name: String,
     #[serde(default)]
     pub next: Vec<StateName>,
-    // Possibly: informational guidance for this state.
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub required_steps: Vec<String>,
+    #[serde(default)]
+    pub contextual_steps: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -37,7 +50,15 @@ pub struct StateName(pub String);
 
 impl Machine {
     pub fn new(name: MachineName, initial_state: StateName, states: Vec<State>) -> Self {
-        let machine = Self { name, initial_state, states };
+        let machine = Self {
+            name,
+            initial_state,
+            states,
+            summary: None,
+            description: None,
+            required_steps: Vec::new(),
+            contextual_steps: Vec::new(),
+        };
         machine.validate_at(None);
         machine
     }
@@ -124,18 +145,16 @@ impl Machine {
     }
 
     fn parse(path: &Path, contents: &str) -> Self {
-        let definition: Machine =
+        let mut definition: Machine =
             toml::from_str(contents).raise_with_context(|| format!("parsing {}", path.display()));
 
         let name = path
             .file_name()
             .and_then(|name| name.to_str())
             .expect("machine definition paths must have a UTF-8 filename");
-        let name = MachineName::parse(name).raise();
-
-        let machine = Self { name, initial_state: definition.initial_state, states: definition.states };
-        machine.validate_at(Some(path));
-        machine
+        definition.name = MachineName::parse(name).raise();
+        definition.validate_at(Some(path));
+        definition
     }
 }
 
@@ -155,6 +174,29 @@ mod tests {
             .to_string()
     }
 
+    fn state(name: &str, next: Vec<StateName>) -> State {
+        State {
+            name: name.to_owned(),
+            next,
+            summary: None,
+            description: None,
+            required_steps: Vec::new(),
+            contextual_steps: Vec::new(),
+        }
+    }
+
+    fn machine(initial_state: &str, states: Vec<State>) -> Machine {
+        Machine {
+            name: MachineName::parse("example").unwrap(),
+            initial_state: StateName(initial_state.to_owned()),
+            states,
+            summary: None,
+            description: None,
+            required_steps: Vec::new(),
+            contextual_steps: Vec::new(),
+        }
+    }
+
     #[test]
     fn missing_next_defaults_to_no_transitions() {
         let machine: Machine =
@@ -165,44 +207,25 @@ mod tests {
 
     #[test]
     fn rejects_empty_state_names() {
-        let machine = Machine {
-            name: MachineName::parse("example").unwrap(),
-            initial_state: StateName(" ".into()),
-            states: vec![State { name: " ".into(), next: vec![] }],
-        };
+        let machine = machine(" ", vec![state(" ", vec![])]);
         assert!(raised_message(|| machine.validate()).contains("state names cannot be empty"));
     }
 
     #[test]
     fn rejects_duplicate_names() {
-        let machine = Machine {
-            name: MachineName::parse("example").unwrap(),
-            initial_state: StateName("draft".into()),
-            states: vec![
-                State { name: "draft".into(), next: vec![] },
-                State { name: "draft".into(), next: vec![] },
-            ],
-        };
+        let machine = machine("draft", vec![state("draft", vec![]), state("draft", vec![])]);
         assert!(raised_message(|| machine.validate()).contains("duplicate state"));
     }
 
     #[test]
     fn rejects_unknown_next_state() {
-        let machine = Machine {
-            name: MachineName::parse("example").unwrap(),
-            initial_state: StateName("draft".into()),
-            states: vec![State { name: "draft".into(), next: vec![StateName("missing".into())] }],
-        };
+        let machine = machine("draft", vec![state("draft", vec![StateName("missing".into())])]);
         assert!(raised_message(|| machine.validate()).contains("unknown next state"));
     }
 
     #[test]
     fn rejects_unknown_initial_state() {
-        let machine = Machine {
-            name: MachineName::parse("example").unwrap(),
-            initial_state: StateName("Missing".into()),
-            states: vec![State { name: "Design".into(), next: vec![] }],
-        };
+        let machine = machine("Missing", vec![state("Design", vec![])]);
 
         assert!(raised_message(|| machine.validate()).contains("unknown initial state"));
     }

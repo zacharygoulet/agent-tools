@@ -258,6 +258,68 @@ fn status_for_one_instance_reports_its_current_details() {
 }
 
 #[test]
+fn status_displays_machine_state_and_next_state_metadata() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let machine_path = root.join(".flow/machines/workflow");
+    fs::create_dir_all(machine_path.parent().unwrap()).unwrap();
+    fs::write(
+        &machine_path,
+        indoc! {r#"
+            summary = "Whole workflow summary"
+            description = "Machine-wide description"
+            required_steps = ["Always do this"]
+            contextual_steps = ["Consider this when relevant"]
+            initial_state = "Draft"
+
+            [[states]]
+            name = "Draft"
+            summary = "Prepare the work"
+            description = "Current-state description"
+            required_steps = ["Confirm the goal"]
+            contextual_steps = ["Check for existing work"]
+            next = ["Review"]
+
+            [[states]]
+            name = "Review"
+            summary = "Review the work"
+            next = []
+        "#},
+    )
+    .unwrap();
+    assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
+
+    let status = run_cli(root, &["status", "run"]);
+    assert!(
+        status.status.success(),
+        "{}",
+        String::from_utf8_lossy(&status.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&status.stdout),
+        indoc! {"\
+            instance: run
+            machine: workflow
+            state: Draft
+            machine summary: Whole workflow summary
+            machine description: Machine-wide description
+            machine required steps:
+              - Always do this
+            machine contextual steps:
+              - Consider this when relevant
+            state summary: Prepare the work
+            state description: Current-state description
+            state required steps:
+              - Confirm the goal
+            state contextual steps:
+              - Check for existing work
+            next states:
+              - Review: Review the work
+        "}
+    );
+}
+
+#[test]
 fn status_reports_when_no_instances_exist() {
     let directory = tempfile::tempdir().unwrap();
     let status = run_cli(directory.path(), &["status"]);

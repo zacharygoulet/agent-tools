@@ -37,7 +37,6 @@ enum Cli {
         #[arg(short, long)]
         global: bool,
     },
-
 }
 
 #[rust_utils::raise_handler]
@@ -79,13 +78,59 @@ fn create_machine_from_template(machine_name: MachineName, global: bool) {
 
 fn status_instance(instance_name: InstanceName) {
     let instance = Instance::load_from_name(instance_name.as_str());
+    let machine = instance.machine();
+    let state = machine
+        .states()
+        .iter()
+        .find(|state| state.name == instance.state().0)
+        .expect("the instance state was validated when it was loaded");
 
     println!(
         "instance: {}\nmachine: {}\nstate: {}",
         instance.name(),
-        instance.machine().name(),
+        machine.name(),
         instance.state().0
     );
+    print_optional("machine summary", machine.summary().as_deref());
+    print_optional("machine description", machine.description().as_deref());
+    print_steps("machine required steps", machine.required_steps());
+    print_steps("machine contextual steps", machine.contextual_steps());
+    print_optional("state summary", state.summary.as_deref());
+    print_optional("state description", state.description.as_deref());
+    print_steps("state required steps", &state.required_steps);
+    print_steps("state contextual steps", &state.contextual_steps);
+
+    if !state.next.is_empty() {
+        println!("next states:");
+        for next in &state.next {
+            let next_state = machine
+                .states()
+                .iter()
+                .find(|candidate| candidate.name == next.0)
+                .expect("machine transitions were validated when it was loaded");
+            match next_state.summary.as_deref() {
+                Some(summary) => println!("  - {}: {summary}", next.0),
+                None => println!("  - {}", next.0),
+            }
+        }
+    }
+}
+
+fn print_optional(label: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        println!("{label}: {value}");
+    }
+}
+
+fn print_steps(label: &str, steps: &[String]) {
+    if steps.is_empty() {
+        return;
+    }
+
+    println!("{label}:");
+    for step in steps {
+        println!("  - {step}");
+    }
 }
 
 fn status_all() {

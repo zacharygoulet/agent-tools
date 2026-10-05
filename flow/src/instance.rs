@@ -198,6 +198,17 @@ mod tests {
             .to_string()
     }
 
+    fn state(name: &str, next: Vec<StateName>) -> State {
+        State {
+            name: name.to_owned(),
+            next,
+            summary: None,
+            description: None,
+            required_steps: Vec::new(),
+            contextual_steps: Vec::new(),
+        }
+    }
+
     fn instance_with_transitions() -> Instance {
         Instance::new(
             InstanceName::parse("run").unwrap(),
@@ -205,9 +216,9 @@ mod tests {
                 MachineName::parse("workflow").unwrap(),
                 StateName("Draft".into()),
                 vec![
-                    State { name: "Draft".into(), next: vec![StateName("Review".into())] },
-                    State { name: "Review".into(), next: vec![] },
-                    State { name: "Done".into(), next: vec![] },
+                    state("Draft", vec![StateName("Review".into())]),
+                    state("Review", vec![]),
+                    state("Done", vec![]),
                 ],
             ),
         )

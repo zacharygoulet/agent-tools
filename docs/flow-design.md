@@ -39,8 +39,13 @@ integrating it with Pi.
   if the local path is absent, even for a globally stored instance.
   Consequently a local same-named machine can shadow a global definition.
 - Machine TOML contains `initial_state` and `[[states]]` entries with `name`
-  and `next`. Instance TOML contains only `machine` and `state`. Each file
-  gets its own name from its filename, not from a field inside the file.
+  and `next`. Machine and state definitions may also include `summary`,
+  `description`, `required_steps`, and `contextual_steps`. These are static
+  guidance, not tracked checklists or transition guards. Machine-level guidance
+  applies across states; state-level guidance is specific to that state. The
+  instance status displays machine and current-state guidance, plus summaries
+  for immediate next states. Instance TOML contains only `machine` and `state`.
+  Each file gets its own name from its filename, not from a field inside the file.
 - `flow start <machine-name> [instance-name]` creates an instance and accepts
   an optional instance name. When omitted, it generates
   `<machine-name>-<32-hex-digit-UUID>`.
@@ -81,9 +86,9 @@ The workspace contains the `flow` crate with `start`,
 `new-machine-from-template`, and `status`; validated machine definitions;
 in-memory and durable movement; CLI tests; and a panic-catching `main`.
 The temporary demonstration panic was removed when the crate moved here.
-Current verification passes formatting, Clippy, 45 tests, and CLI help plus
+Current verification passes formatting, Clippy, 47 tests, and CLI help plus
 machine-template and start/status smoke tests. There is no movement history,
-additional per-instance status reporting, context storage, or Pi extension yet.
+context storage, or Pi extension yet.
 Generated instance names use machine-prefixed random UUIDs.
 The old `.agent-sm` storage paths were renamed to `.flow`; other projects'
 old local files were not migrated automatically.
@@ -96,10 +101,9 @@ human-readable, but machine validation rejects empty/whitespace-only and
 duplicate state names. Moving CLI command handlers onto command types remains
 open. A second general style change was mentioned but not specified. Return to
 Design with Zach before implementing each new slice; test and review before
-moving to another. Defining additional per-instance status details is future
-work. History and concurrent-write behavior remain open design questions,
-along with hold/cancel/resume, informational guidance, definition
-versioning and remaining malformed-definition checks. Add a second small
+moving to another. History and concurrent-write behavior remain open design
+questions, along with hold/cancel/resume, definition versioning, and remaining
+malformed-definition checks. Add a second small
 definition to verify that the engine remains generic.
 
 ## Environment

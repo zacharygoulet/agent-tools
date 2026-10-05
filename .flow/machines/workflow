@@ -1,36 +1,141 @@
+
+# Workflow machine
+summary = "Full workflow from selecting a task to completing it."
+
+description = """
+Drive work proactively toward completion, going through each step required to complete a task fully.
+"""
+
+required_steps = [
+    "Before taking any action of the workflow, state your intentions.",
+    "At each user-facing boundary, report the outcome, the next step, and any decision needed.",
+    "Do not claim work is complete until implementation and validation are complete.",
+]
+contextual_steps = [
+    "Use the local worklog when the project has one.",
+    "Load coding-style before writing or refactoring code.",
+    "Use plans for substantial implementation designs.",
+    "Load domain skills such as validation, multi-repo, or NixOS configuration when relevant.",
+]
+
 initial_state = "Select"
 
+# Select State
 [[states]]
 name = "Select"
+summary = "Choose a ready task or resume work already in progress."
+description = "Select one item to work on. Prefer resuming work already owned, then choose the best ready item from the active tracker. Exclude blocked work and items claimed by others. Do not define the task before it is confirmed."
+required_steps = [
+    "Present the selected item with its priority, status, and blockers when known.",
+    "Wait for confirmation before claiming or defining the work.",
+]
+contextual_steps = [
+    "When no task is supplied, inspect the local worklog before other trackers or project task lists.",
+    "For simple untracked work, ask whether to track it or handle it without a task.",
+]
 next = ["Define"]
 
 [[states]]
 name = "Define"
+summary = "Agree on the goal, scope, constraints, and acceptance criteria."
+description = "Establish what the work should accomplish and why. Resolve only the missing information that prevents a clear implementation target."
+required_steps = [
+    "Define observable acceptance criteria.",
+    "Clarify the motivation, scope, constraints, and dependencies.",
+]
+contextual_steps = [
+    "For bugs, establish symptoms and reproduction steps before diagnosing the cause.",
+    "For multi-repository work, coordinate repository order and dependencies.",
+]
 next = ["Design"]
 
 [[states]]
 name = "Design"
+summary = "Inspect the code and agree on an implementation approach."
+description = "Investigate existing patterns and constraints. Compare viable approaches and recommend the simplest maintainable solution. Obtain agreement before implementation."
+required_steps = [
+    "Identify the relevant code, risks, and validation strategy.",
+    "Get approval for the proposed approach before coding.",
+]
+contextual_steps = [
+    "Use a persisted plan for substantial designs.",
+    "Return to Define or Design if implementation invalidates the requirements or approach.",
+]
 next = ["Implement", "Define"]
 
 [[states]]
 name = "Implement"
+summary = "Make the agreed changes within the defined scope."
+description = """
+Implement the approved approach using project conventions. Keep the change focused and avoid unrelated cleanup.
+"""
+required_steps = [
+    "Follow the project's coding style and existing patterns.",
+    "Keep changes scoped to the agreed acceptance criteria.",
+]
+contextual_steps = [
+    "Use an isolated task worktree when the workflow or user requests one.",
+    "Commit incrementally when it makes related changes easier to review.",
+]
 next = ["Test", "Design"]
 
 [[states]]
 name = "Test"
+summary = "Run the relevant checks and record their results."
+description = "Choose repeatable build, lint, and test checks that provide evidence for the change. Return to implementation or redesign if validation fails."
+required_steps = [
+    "Run relevant automated checks.",
+    "Record commands, results, and untested behavior.",
+]
+contextual_steps = [
+    "Add tests for the new behavior and meaningful edge cases.",
+    "Use a manual check only when automated validation is insufficient.",
+]
 next = ["Improve and Clean", "Finalize", "Implement"]
 
 [[states]]
 name = "Improve and Clean"
+summary = "Refine the implementation without changing its behavior."
+description = "Remove debugging remnants and dead code; improve names, structure, consistency, and tests; simplify unnecessary complexity. Return to design if cleanup exposes a design problem."
+required_steps = [
+    "Review the complete change for clarity and scope.",
+    "Apply the project's coding style.",
+]
+contextual_steps = [
+    "Avoid refactoring unrelated code.",
+]
 next = ["Test", "Implement"]
 
 [[states]]
 name = "Finalize"
+summary = "Review the complete change and agree on delivery actions."
+description = "Review the diff, repository state, and validation evidence. Present any durable finalization choices and perform only the actions the user approves."
+required_steps = [
+    "Summarize changes, validation, and residual risks.",
+    "Get approval before committing, pushing, merging, archiving, or cleaning up.",
+]
+contextual_steps = [
+    "Update or close tracked work when the user approves and the tracker supports it.",
+]
 next = ["Future Work", "Test"]
 
 [[states]]
 name = "Future Work"
+summary = "Preserve deferred or newly discovered follow-up work."
+description = "Review out-of-scope and deferred items. Record approved follow-ups in the chosen tracker, preferring the local worklog when available."
+required_steps = [
+    "Identify meaningful deferred work and where it should be tracked.",
+    "Ask whether the user has anything else to preserve.",
+]
+contextual_steps = []
 next = ["Self Improve"]
 
 [[states]]
 name = "Self Improve"
+summary = "Consider whether this work revealed a concrete workflow improvement."
+description = "Look for recurring friction supported by evidence. Suggest a focused change to the workflow, related skills, or managed configuration only when warranted. Apply shared changes only with user approval."
+required_steps = [
+    "Do not invent improvements without concrete evidence.",
+    "Ask whether there is anything to improve before completing the workflow.",
+]
+contextual_steps = []
