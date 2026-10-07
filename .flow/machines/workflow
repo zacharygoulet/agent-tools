@@ -1,44 +1,45 @@
 
-# Workflow machine
-summary = "Full workflow from selecting a task to completing it."
-
-description = """
-Drive work proactively toward completion, going through each step required to complete a task fully.
-"""
-
-required_steps = [
-    "Before taking any action of the workflow, state your intentions.",
-    "At each user-facing boundary, report the outcome, the next step, and any decision needed.",
-    "Do not claim work is complete until implementation and validation are complete.",
-]
-contextual_steps = [
-    "Use the local worklog when the project has one.",
-    "Load coding-style before writing or refactoring code.",
-    "Use plans for substantial implementation designs.",
-    "Load domain skills such as validation, multi-repo, or NixOS configuration when relevant.",
-]
+description = "Contains all steps required to be fully done with a piece of work."
 
 initial_state = "Select"
 
 # Select State
 [[states]]
 name = "Select"
-summary = "Choose a ready task or resume work already in progress."
-description = "Select one item to work on. Prefer resuming work already owned, then choose the best ready item from the active tracker. Exclude blocked work and items claimed by others. Do not define the task before it is confirmed."
+summary = "Select what to work on."
+
+description = """
+Select a candidate, selection priority order:
+1. Work provided by the user in the original request
+2. Use the projects tracker if any (check skills)
+3. Look for inboxes, todos or roadmap markdown files
+4. Ask the user if nothing was found before.
+
+To claim work, follow tracker guidelines if using one, othewise add marker if necessary
+to avoid double claiming from another agent.
+"""
+
 required_steps = [
-    "Present the selected item with its priority, status, and blockers when known.",
-    "Wait for confirmation before claiming or defining the work.",
+    "Select a candidate (with alternatives if choice is non-obvious)"
+    "Confirm choice with the user"
+    "Claim the work",
 ]
 contextual_steps = [
-    "When no task is supplied, inspect the local worklog before other trackers or project task lists.",
-    "For simple untracked work, ask whether to track it or handle it without a task.",
+    "If the tracker supports it, present the selected item with its priority, status, and blockers when known.",
+    "If the work is trivial, ask the user if it wants to skip tracking"
 ]
+
 next = ["Define"]
 
 [[states]]
 name = "Define"
-summary = "Agree on the goal, scope, constraints, and acceptance criteria."
-description = "Establish what the work should accomplish and why. Resolve only the missing information that prevents a clear implementation target."
+summary = "Define what the work should accomplish and why before designing a solution."
+description = """
+1. Read relevant user, tracker, and repository context.
+2. Clarify the goal, motivation, scope, constraints, dependencies, and observable acceptance criteria.
+3. For bugs, establish symptoms, reproduction, and expected behavior; investigate root cause during Design.
+4. Ask only for information that cannot be resolved from available context.
+"""
 required_steps = [
     "Define observable acceptance criteria.",
     "Clarify the motivation, scope, constraints, and dependencies.",
