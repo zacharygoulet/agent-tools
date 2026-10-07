@@ -149,7 +149,7 @@ impl Machine {
             toml::from_str(contents).raise_with_context(|| format!("parsing {}", path.display()));
 
         let name = path
-            .file_name()
+            .file_stem()
             .and_then(|name| name.to_str())
             .expect("machine definition paths must have a UTF-8 filename");
         definition.name = MachineName::parse(name).raise();

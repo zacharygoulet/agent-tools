@@ -11,7 +11,7 @@ fn load_with_machine(machine_definition: Option<&str>) -> Output {
     let root = directory.path();
     fs::create_dir_all(root.join(".flow/instances")).unwrap();
     fs::write(
-        root.join(".flow/instances/run"),
+        root.join(".flow/instances/run.toml"),
         indoc! {r#"
             machine = "workflow"
             state = "Design"
@@ -21,7 +21,7 @@ fn load_with_machine(machine_definition: Option<&str>) -> Output {
 
     if let Some(contents) = machine_definition {
         fs::create_dir_all(root.join(".flow/machines")).unwrap();
-        fs::write(root.join(".flow/machines/workflow"), contents).unwrap();
+        fs::write(root.join(".flow/machines/workflow.toml"), contents).unwrap();
     }
 
     run_cli(root, &["status", "run"])
@@ -37,11 +37,11 @@ fn run_cli(root: &Path, args: &[&str]) -> Output {
 }
 
 fn write_local_machine(root: &Path) {
-    write_machine(&root.join(".flow/machines/workflow"));
+    write_machine(&root.join(".flow/machines/workflow.toml"));
 }
 
 fn write_global_machine(root: &Path) {
-    write_machine(&root.join("global/flow/machines/workflow"));
+    write_machine(&root.join("global/flow/machines/workflow.toml"));
 }
 
 fn write_machine(path: &Path) {
@@ -107,7 +107,7 @@ fn reports_missing_machine_from_instance_deserialization() {
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(error.contains(r#"machine "workflow" not found"#), "{error}");
-    assert!(error.contains(".flow/machines/workflow"), "{error}");
+    assert!(error.contains(".flow/machines/workflow.toml"), "{error}");
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn reports_invalid_machine_from_instance_deserialization() {
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(error.contains("unknown next state Missing"), "{error}");
-    assert!(error.contains(".flow/machines/workflow"), "{error}");
+    assert!(error.contains(".flow/machines/workflow.toml"), "{error}");
 }
 
 #[test]
@@ -135,7 +135,7 @@ fn new_machine_from_template_creates_a_valid_local_definition() {
         "{}",
         String::from_utf8_lossy(&created.stderr)
     );
-    let machine_path = root.join(".flow/machines/workflow");
+    let machine_path = root.join(".flow/machines/workflow.toml");
     assert_eq!(
         fs::read_to_string(&machine_path).unwrap(),
         include_str!("../templates/machine.toml")
@@ -161,9 +161,9 @@ fn new_machine_from_template_supports_global_scope_without_overwriting() {
         "{}",
         String::from_utf8_lossy(&created.stderr)
     );
-    let machine_path = root.join("global/flow/machines/workflow");
+    let machine_path = root.join("global/flow/machines/workflow.toml");
     let original = fs::read_to_string(&machine_path).unwrap();
-    assert!(!root.join(".flow/machines/workflow").exists());
+    assert!(!root.join(".flow/machines/workflow.toml").exists());
 
     let duplicate = run_cli(root, &["new-machine-from-template", "workflow", "-g"]);
     assert!(!duplicate.status.success());
@@ -191,7 +191,7 @@ fn new_creates_local_instance_that_can_be_loaded() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("created instance run at"));
-    let instance_path = root.join(".flow/instances/run");
+    let instance_path = root.join(".flow/instances/run.toml");
     assert_eq!(
         fs::read_to_string(&instance_path).unwrap(),
         indoc! {r#"
@@ -261,7 +261,7 @@ fn status_for_one_instance_reports_its_current_details() {
 fn status_displays_machine_state_and_next_state_metadata() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    let machine_path = root.join(".flow/machines/workflow");
+    let machine_path = root.join(".flow/machines/workflow.toml");
     fs::create_dir_all(machine_path.parent().unwrap()).unwrap();
     fs::write(
         &machine_path,
@@ -335,7 +335,7 @@ fn status_reports_when_no_instances_exist() {
 fn next_and_jump_persist_local_instance_state() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_movable_machine(&root.join(".flow/machines/workflow"));
+    write_movable_machine(&root.join(".flow/machines/workflow.toml"));
     assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
 
     let next = run_cli(root, &["next", "run", "Review"]);
@@ -347,7 +347,7 @@ fn next_and_jump_persist_local_instance_state() {
     let jump = run_cli(root, &["jump", "run", "Done"]);
     assert!(jump.status.success(), "{}", String::from_utf8_lossy(&jump.stderr));
     assert_eq!(
-        fs::read_to_string(root.join(".flow/instances/run")).unwrap(),
+        fs::read_to_string(root.join(".flow/instances/run.toml")).unwrap(),
         indoc! {r#"
             machine = "workflow"
             state = "Done"
@@ -359,9 +359,9 @@ fn next_and_jump_persist_local_instance_state() {
 fn rejected_moves_leave_instance_file_unchanged() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_movable_machine(&root.join(".flow/machines/workflow"));
+    write_movable_machine(&root.join(".flow/machines/workflow.toml"));
     assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
-    let path = root.join(".flow/instances/run");
+    let path = root.join(".flow/instances/run.toml");
     let original = fs::read_to_string(&path).unwrap();
 
     let next = run_cli(root, &["next", "run", "Done"]);
@@ -377,7 +377,7 @@ fn rejected_moves_leave_instance_file_unchanged() {
 fn movement_updates_global_instance_without_creating_a_local_one() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_movable_machine(&root.join("global/flow/machines/workflow"));
+    write_movable_machine(&root.join("global/flow/machines/workflow.toml"));
     assert!(
         run_cli(root, &["start", "workflow", "run", "-g"])
             .status
@@ -386,9 +386,9 @@ fn movement_updates_global_instance_without_creating_a_local_one() {
 
     let next = run_cli(root, &["next", "run", "Review"]);
     assert!(next.status.success(), "{}", String::from_utf8_lossy(&next.stderr));
-    assert!(!root.join(".flow/instances/run").exists());
+    assert!(!root.join(".flow/instances/run.toml").exists());
     assert!(
-        fs::read_to_string(root.join("global/flow/instances/run"))
+        fs::read_to_string(root.join("global/flow/instances/run.toml"))
             .unwrap()
             .contains("state = \"Review\"")
     );
@@ -399,14 +399,14 @@ fn new_rejects_collision_in_global_scope() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     write_local_machine(root);
-    let existing = root.join("global/flow/instances/run");
+    let existing = root.join("global/flow/instances/run.toml");
     fs::create_dir_all(existing.parent().unwrap()).unwrap();
     fs::write(&existing, "original").unwrap();
 
     let output = run_cli(root, &["start", "workflow", "run"]);
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("already exists"));
-    assert!(!root.join(".flow/instances/run").exists());
+    assert!(!root.join(".flow/instances/run.toml").exists());
     assert_eq!(fs::read_to_string(existing).unwrap(), "original");
 }
 
@@ -447,7 +447,11 @@ fn new_generates_machine_prefixed_instance_name_that_can_be_loaded() {
             .chars()
             .all(|character| character.is_ascii_hexdigit())
     );
-    assert!(root.join(".flow/instances").join(name).is_file());
+    assert!(
+        root.join(".flow/instances")
+            .join(format!("{name}.toml"))
+            .is_file()
+    );
 
     let loaded = run_cli(root, &["status", name]);
     assert!(
@@ -471,13 +475,13 @@ fn new_global_creates_instance_with_global_machine() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(
-        fs::read_to_string(root.join("global/flow/instances/run")).unwrap(),
+        fs::read_to_string(root.join("global/flow/instances/run.toml")).unwrap(),
         indoc! {r#"
             machine = "workflow"
             state = "Design"
         "#}
     );
-    assert!(!root.join(".flow/instances/run").exists());
+    assert!(!root.join(".flow/instances/run.toml").exists());
     let loaded = run_cli(root, &["status", "run"]);
     assert!(
         loaded.status.success(),
@@ -492,7 +496,7 @@ fn new_copy_machine_installs_local_definition_and_creates_global_instance() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     write_local_machine(root);
-    let local_machine = root.join(".flow/machines/workflow");
+    let local_machine = root.join(".flow/machines/workflow.toml");
 
     let output = run_cli(root, &["start", "workflow", "run", "-G"]);
     assert!(
@@ -501,10 +505,10 @@ fn new_copy_machine_installs_local_definition_and_creates_global_instance() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(
-        fs::read_to_string(root.join("global/flow/machines/workflow")).unwrap(),
+        fs::read_to_string(root.join("global/flow/machines/workflow.toml")).unwrap(),
         fs::read_to_string(local_machine).unwrap()
     );
-    assert!(!root.join(".flow/instances/run").exists());
+    assert!(!root.join(".flow/instances/run.toml").exists());
     let loaded = run_cli(root, &["status", "run"]);
     assert!(
         loaded.status.success(),
@@ -518,7 +522,7 @@ fn new_copy_machine_keeps_existing_global_definition() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     write_local_machine(root);
-    let global_machine = root.join("global/flow/machines/workflow");
+    let global_machine = root.join("global/flow/machines/workflow.toml");
     fs::create_dir_all(global_machine.parent().unwrap()).unwrap();
     let existing = indoc! {r#"
         initial_state = "Review"
@@ -535,7 +539,7 @@ fn new_copy_machine_keeps_existing_global_definition() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(fs::read_to_string(global_machine).unwrap(), existing);
-    assert!(root.join("global/flow/instances/run").is_file());
+    assert!(root.join("global/flow/instances/run.toml").is_file());
 }
 
 #[test]
@@ -543,14 +547,14 @@ fn new_copy_machine_checks_instance_collision_before_copy() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     write_local_machine(root);
-    let existing = root.join(".flow/instances/run");
+    let existing = root.join(".flow/instances/run.toml");
     fs::create_dir_all(existing.parent().unwrap()).unwrap();
     fs::write(&existing, "original").unwrap();
 
     let output = run_cli(root, &["start", "workflow", "run", "-G"]);
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("already exists"));
-    assert!(!root.join("global/flow/machines/workflow").exists());
+    assert!(!root.join("global/flow/machines/workflow.toml").exists());
     assert_eq!(fs::read_to_string(existing).unwrap(), "original");
 }
 
@@ -559,14 +563,14 @@ fn new_copy_machine_rejects_invalid_existing_global_definition() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     write_local_machine(root);
-    let global_machine = root.join("global/flow/machines/workflow");
+    let global_machine = root.join("global/flow/machines/workflow.toml");
     fs::create_dir_all(global_machine.parent().unwrap()).unwrap();
     fs::write(&global_machine, "invalid toml = ").unwrap();
 
     let output = run_cli(root, &["start", "workflow", "run", "-G"]);
     assert!(!output.status.success());
     assert_eq!(fs::read_to_string(global_machine).unwrap(), "invalid toml = ");
-    assert!(!root.join("global/flow/instances/run").exists());
+    assert!(!root.join("global/flow/instances/run.toml").exists());
 }
 
 #[test]
@@ -579,8 +583,8 @@ fn new_global_requires_global_machine_even_if_local_exists() {
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(error.contains("global machine \"workflow\" not found"), "{error}");
-    assert!(error.contains("global/flow/machines/workflow"), "{error}");
-    assert!(!root.join("global/flow/instances/run").exists());
+    assert!(error.contains("global/flow/machines/workflow.toml"), "{error}");
+    assert!(!root.join("global/flow/instances/run.toml").exists());
 }
 
 #[test]
@@ -588,12 +592,12 @@ fn new_global_rejects_invalid_global_machine() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     write_local_machine(root);
-    let global_machine = root.join("global/flow/machines/workflow");
+    let global_machine = root.join("global/flow/machines/workflow.toml");
     fs::create_dir_all(global_machine.parent().unwrap()).unwrap();
     fs::write(&global_machine, "invalid toml = ").unwrap();
 
     let output = run_cli(root, &["start", "workflow", "run", "-g"]);
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("global/flow/machines/workflow"));
-    assert!(!root.join("global/flow/instances/run").exists());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("global/flow/machines/workflow.toml"));
+    assert!(!root.join("global/flow/instances/run.toml").exists());
 }

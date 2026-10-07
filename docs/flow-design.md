@@ -33,7 +33,7 @@ integrating it with Pi.
 
 ## Files and lookup
 
-- Local files are in `.flow/{machines,instances}/`; global files are in
+- Local files are in `.flow/{machines,instances}/` with `.toml` extensions; global files are in
   `$XDG_STATE_HOME/flow/{machines,instances}/`, defaulting to
   `~/.local/state/flow/`. Lookup is local-first and falls back globally only
   if the local path is absent, even for a globally stored instance.
@@ -45,7 +45,7 @@ integrating it with Pi.
   applies across states; state-level guidance is specific to that state. The
   instance status displays machine and current-state guidance, plus summaries
   for immediate next states. Instance TOML contains only `machine` and `state`.
-  Each file gets its own name from its filename, not from a field inside the file.
+  Each file gets its own name from its filename without the `.toml` extension, not from a field inside the file.
 - `flow start <machine-name> [instance-name]` creates an instance and accepts
   an optional instance name. When omitted, it generates
   `<machine-name>-<32-hex-digit-UUID>`.

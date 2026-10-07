@@ -24,6 +24,10 @@ impl StorageFile {
             Self::Instance => "instances",
         }
     }
+
+    fn extension(self) -> &'static str {
+        "toml"
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -107,7 +111,19 @@ impl Storage {
                 if !entry.path().is_file() {
                     continue;
                 }
-                let name = entry.file_name().to_string_lossy().into_owned();
+                let Some(name) = entry
+                    .path()
+                    .file_stem()
+                    .filter(|_| {
+                        entry
+                            .path()
+                            .extension()
+                            .is_some_and(|extension| extension == "toml")
+                    })
+                    .map(|name| name.to_string_lossy().into_owned())
+                else {
+                    continue;
+                };
                 InstanceName::parse(name.clone())
                     .raise_with_context(|| format!("invalid instance filename in {}", directory.display()));
                 names.insert(name);
@@ -159,7 +175,8 @@ impl Storage {
             Scope::Local => &self.local,
             Scope::Global => &self.global,
         };
-        root.join(storage_file.directory()).join(name)
+        root.join(storage_file.directory())
+            .join(format!("{name}.{}", storage_file.extension()))
     }
 }
 
@@ -183,8 +200,8 @@ mod tests {
     #[test]
     fn prefers_local_instance() {
         let root = tempfile::tempdir().unwrap();
-        let local = root.path().join(".flow/instances/run");
-        let global = root.path().join("global/flow/instances/run");
+        let local = root.path().join(".flow/instances/run.toml");
+        let global = root.path().join("global/flow/instances/run.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::create_dir_all(global.parent().unwrap()).unwrap();
         fs::write(&local, "local").unwrap();
@@ -199,8 +216,8 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
         let error = raised_message(|| storage.find_instance("run"));
-        assert!(error.contains(".flow/instances/run"));
-        assert!(error.contains("global/flow/instances/run"));
+        assert!(error.contains(".flow/instances/run.toml"));
+        assert!(error.contains("global/flow/instances/run.toml"));
     }
 
     #[test]
@@ -214,8 +231,8 @@ mod tests {
     #[test]
     fn finds_machine_locally_then_globally() {
         let root = tempfile::tempdir().unwrap();
-        let local = root.path().join(".flow/machines/workflow");
-        let global = root.path().join("global/flow/machines/workflow");
+        let local = root.path().join(".flow/machines/workflow.toml");
+        let global = root.path().join("global/flow/machines/workflow.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::create_dir_all(global.parent().unwrap()).unwrap();
         fs::write(&global, "global").unwrap();
@@ -229,7 +246,7 @@ mod tests {
     #[test]
     fn finds_machine_in_global_storage_only() {
         let root = tempfile::tempdir().unwrap();
-        let local = root.path().join(".flow/machines/workflow");
+        let local = root.path().join(".flow/machines/workflow.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::write(&local, "local").unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
@@ -244,8 +261,8 @@ mod tests {
     fn rejects_creation_collisions_in_either_scope() {
         let root = tempfile::tempdir().unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        let local = root.path().join(".flow/instances/run");
-        let global = root.path().join("global/flow/instances/run");
+        let local = root.path().join(".flow/instances/run.toml");
+        let global = root.path().join("global/flow/instances/run.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::create_dir_all(global.parent().unwrap()).unwrap();
 
@@ -262,8 +279,8 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let root = tempfile::tempdir().unwrap();
-        let local = root.path().join(".flow/instances/run");
-        let global = root.path().join("global/flow/instances/run");
+        let local = root.path().join(".flow/instances/run.toml");
+        let global = root.path().join("global/flow/instances/run.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::create_dir_all(global.parent().unwrap()).unwrap();
         symlink("missing-target", &local).unwrap();
