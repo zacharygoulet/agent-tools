@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    InstanceName, Machine, MachineName, StateName,
+    Definition, DefinitionName, InstanceName, StateName,
     file_writer::FileWriter,
     storage::{Scope, Storage},
 };
@@ -17,8 +17,8 @@ pub struct Instance {
     // why do we need this? skip + default
     #[serde(skip, default = "InstanceName::placeholder")]
     name: InstanceName,
-    #[serde(deserialize_with = "load_machine", serialize_with = "save_machine_name")]
-    machine: Machine,
+    #[serde(deserialize_with = "load_definition", serialize_with = "save_definition_name")]
+    definition: Definition,
     state: StateName,
     // Persistent context belongs to this run; its representation is undecided.
 }
@@ -31,13 +31,13 @@ pub enum Move {
 #[derive(Debug)]
 pub enum InstanceSavePolicy {
     Local,
-    Global { copy_local_machine_to_global: bool },
+    Global { copy_local_definition_to_global: bool },
 }
 
 impl InstanceSavePolicy {
-    pub fn from_cli_args(global: bool, copy_machine: bool) -> Self {
-        if global || copy_machine {
-            Self::Global { copy_local_machine_to_global: copy_machine }
+    pub fn from_cli_args(global: bool, copy_definition: bool) -> Self {
+        if global || copy_definition {
+            Self::Global { copy_local_definition_to_global: copy_definition }
         } else {
             Self::Local
         }
@@ -50,22 +50,22 @@ impl InstanceSavePolicy {
         }
     }
 
-    fn prepare_machine(&self, machine: &Machine) {
+    fn prepare_definition(&self, definition: &Definition) {
         match self {
             Self::Local => {}
-            Self::Global { copy_local_machine_to_global: true } => {
-                machine.install_global_from_local_if_missing();
+            Self::Global { copy_local_definition_to_global: true } => {
+                definition.install_global_from_local_if_missing();
             }
-            Self::Global { copy_local_machine_to_global: false } => machine.ensure_global_definition(),
+            Self::Global { copy_local_definition_to_global: false } => definition.ensure_global_definition(),
         }
     }
 }
 
 impl Instance {
-    pub fn new(name: InstanceName, machine: Machine) -> Self {
-        machine.validate();
-        let state = machine.initial_state().clone();
-        let instance = Self { name, machine, state };
+    pub fn new(name: InstanceName, definition: Definition) -> Self {
+        definition.validate();
+        let state = definition.initial_state().clone();
+        let instance = Self { name, definition, state };
         instance.validate_current_state();
         instance
     }
@@ -74,27 +74,32 @@ impl Instance {
         let target = match movement {
             Move::Next(target) => {
                 let current = self
-                    .machine
+                    .definition
                     .states()
                     .iter()
                     .find(|state| state.name == self.state.0)
                     .expect("current state was validated");
                 if !current.next.iter().any(|next| next.0 == target.0) {
                     raise::raise(format!(
-                        "state {:?} cannot move next to {:?} in machine {:?}",
+                        "state {:?} cannot move next to {:?} in definition {:?}",
                         self.state.0,
                         target.0,
-                        self.machine.name()
+                        self.definition.name()
                     ));
                 }
                 target
             }
             Move::JumpTo(target) => {
-                if !self.machine.states().iter().any(|state| state.name == target.0) {
+                if !self
+                    .definition
+                    .states()
+                    .iter()
+                    .any(|state| state.name == target.0)
+                {
                     raise::raise(format!(
-                        "cannot move to unknown state {:?} in machine {:?}",
+                        "cannot move to unknown state {:?} in definition {:?}",
                         target.0,
-                        self.machine.name()
+                        self.definition.name()
                     ));
                 }
                 target
@@ -105,7 +110,7 @@ impl Instance {
 
     pub fn save_new(&self, policy: InstanceSavePolicy) -> PathBuf {
         let path = Storage::current().new_instance_path(self.name.as_str(), policy.scope());
-        policy.prepare_machine(&self.machine);
+        policy.prepare_definition(&self.definition);
         self.save_to_path(&path);
         path
     }
@@ -154,41 +159,41 @@ impl Instance {
 
     fn validate_current_state(&self) {
         if !self
-            .machine
+            .definition
             .states()
             .iter()
             .any(|state| state.name == self.state.0)
         {
             raise::raise(format!(
-                "instance {:?} refers to unknown state {:?} in machine {:?}",
+                "instance {:?} refers to unknown state {:?} in definition {:?}",
                 self.name,
                 self.state.0,
-                self.machine.name()
+                self.definition.name()
             ));
         }
     }
 }
 
-fn load_machine<'de, D>(deserializer: D) -> std::result::Result<Machine, D::Error>
+fn load_definition<'de, D>(deserializer: D) -> std::result::Result<Definition, D::Error>
 where
     D: Deserializer<'de>,
 {
     let name = String::deserialize(deserializer)?;
-    let name = MachineName::parse(name).map_err(serde::de::Error::custom)?;
-    Ok(Machine::load_from_name(name.as_str()))
+    let name = DefinitionName::parse(name).map_err(serde::de::Error::custom)?;
+    Ok(Definition::load_from_name(name.as_str()))
 }
 
-fn save_machine_name<S>(machine: &Machine, serializer: S) -> std::result::Result<S::Ok, S::Error>
+fn save_definition_name<S>(definition: &Definition, serializer: S) -> std::result::Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    serializer.serialize_str(machine.name().as_str())
+    serializer.serialize_str(definition.name().as_str())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Instance, Machine, Move, StateName};
-    use crate::{InstanceName, MachineName, State};
+    use super::{Definition, Instance, Move, StateName};
+    use crate::{DefinitionName, InstanceName, State};
     use indoc::indoc;
     use rust_utils::raise::catch_raised;
 
@@ -205,8 +210,8 @@ mod tests {
     fn instance_with_transitions() -> Instance {
         Instance::new(
             InstanceName::parse("run").unwrap(),
-            Machine::new(
-                MachineName::parse("workflow").unwrap(),
+            Definition::new(
+                DefinitionName::parse("workflow").unwrap(),
                 StateName("Draft".into()),
                 vec![
                     state("Draft", vec![StateName("Review".into())]),
@@ -248,8 +253,8 @@ mod tests {
     }
 
     #[test]
-    fn constructor_rejects_invalid_machine() {
-        let machine: Machine = toml::from_str(indoc! {r#"
+    fn constructor_rejects_invalid_definition() {
+        let definition: Definition = toml::from_str(indoc! {r#"
             initial_state = "Missing"
             [[states]]
             name = "Design"
@@ -258,13 +263,13 @@ mod tests {
         .unwrap();
 
         assert!(
-            raised_message(|| Instance::new(InstanceName::parse("run").unwrap(), machine))
+            raised_message(|| Instance::new(InstanceName::parse("run").unwrap(), definition))
                 .contains("unknown initial state")
         );
     }
 
     #[test]
-    fn verifies_current_state_belongs_to_machine() {
+    fn verifies_current_state_belongs_to_definition() {
         let mut instance = instance_with_transitions();
         instance.state = StateName("Missing".into());
         assert!(raised_message(|| instance.validate_current_state()).contains("Missing"));

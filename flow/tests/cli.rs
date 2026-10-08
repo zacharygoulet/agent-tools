@@ -6,22 +6,22 @@ use std::{
 
 use indoc::indoc;
 
-fn load_with_machine(machine_definition: Option<&str>) -> Output {
+fn load_with_definition(definition_contents: Option<&str>) -> Output {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     fs::create_dir_all(root.join(".flow/instances")).unwrap();
     fs::write(
         root.join(".flow/instances/run.toml"),
         indoc! {r#"
-            machine = "workflow"
+            definition = "workflow"
             state = "Design"
         "#},
     )
     .unwrap();
 
-    if let Some(contents) = machine_definition {
-        fs::create_dir_all(root.join(".flow/machines")).unwrap();
-        fs::write(root.join(".flow/machines/workflow.toml"), contents).unwrap();
+    if let Some(contents) = definition_contents {
+        fs::create_dir_all(root.join(".flow/definitions")).unwrap();
+        fs::write(root.join(".flow/definitions/workflow.toml"), contents).unwrap();
     }
 
     run_cli(root, &["status", "run"])
@@ -36,15 +36,15 @@ fn run_cli(root: &Path, args: &[&str]) -> Output {
         .unwrap()
 }
 
-fn write_local_machine(root: &Path) {
-    write_machine(&root.join(".flow/machines/workflow.toml"));
+fn write_local_definition(root: &Path) {
+    write_definition(&root.join(".flow/definitions/workflow.toml"));
 }
 
-fn write_global_machine(root: &Path) {
-    write_machine(&root.join("global/flow/machines/workflow.toml"));
+fn write_global_definition(root: &Path) {
+    write_definition(&root.join("global/flow/definitions/workflow.toml"));
 }
 
-fn write_machine(path: &Path) {
+fn write_definition(path: &Path) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(
         path,
@@ -58,7 +58,7 @@ fn write_machine(path: &Path) {
     .unwrap();
 }
 
-fn write_movable_machine(path: &Path) {
+fn write_movable_definition(path: &Path) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(
         path,
@@ -79,8 +79,8 @@ fn write_movable_machine(path: &Path) {
 }
 
 #[test]
-fn loads_instance_with_separate_machine_file() {
-    let output = load_with_machine(Some(indoc! {r#"
+fn loads_instance_with_separate_definition_file() {
+    let output = load_with_definition(Some(indoc! {r#"
             initial_state = "Design"
             [[states]]
             name = "Design"
@@ -95,24 +95,52 @@ fn loads_instance_with_separate_machine_file() {
         String::from_utf8_lossy(&output.stdout),
         indoc! {r#"
             instance: run
-            machine: workflow
+            definition: workflow
             state: Design
         "#}
     );
 }
 
 #[test]
-fn reports_missing_machine_from_instance_deserialization() {
-    let output = load_with_machine(None);
+fn reports_missing_definition_from_instance_deserialization() {
+    let output = load_with_definition(None);
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
-    assert!(error.contains(r#"machine "workflow" not found"#), "{error}");
-    assert!(error.contains(".flow/machines/workflow.toml"), "{error}");
+    assert!(error.contains(r#"definition "workflow" not found"#), "{error}");
+    assert!(error.contains(".flow/definitions/workflow.toml"), "{error}");
 }
 
 #[test]
-fn reports_invalid_machine_from_instance_deserialization() {
-    let output = load_with_machine(Some(indoc! {r#"
+fn rejects_legacy_instance_key() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_local_definition(root);
+    fs::create_dir_all(root.join(".flow/instances")).unwrap();
+    fs::write(
+        root.join(".flow/instances/run.toml"),
+        "machine = 'workflow'\nstate = 'Design'\n",
+    )
+    .unwrap();
+
+    let output = run_cli(root, &["status", "run"]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("missing field `definition`"));
+}
+
+#[test]
+fn rejects_legacy_definition_directory() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_definition(&root.join(".flow/machines/workflow.toml"));
+
+    let output = run_cli(root, &["start", "workflow", "run"]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("definition \"workflow\" not found"));
+}
+
+#[test]
+fn reports_invalid_definition_from_instance_deserialization() {
+    let output = load_with_definition(Some(indoc! {r#"
             initial_state = "Design"
             [[states]]
             name = "Design"
@@ -121,24 +149,24 @@ fn reports_invalid_machine_from_instance_deserialization() {
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(error.contains("unknown next state Missing"), "{error}");
-    assert!(error.contains(".flow/machines/workflow.toml"), "{error}");
+    assert!(error.contains(".flow/definitions/workflow.toml"), "{error}");
 }
 
 #[test]
-fn new_machine_from_template_creates_a_valid_local_definition() {
+fn new_definition_from_template_creates_a_valid_local_definition() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
 
-    let created = run_cli(root, &["new-machine-from-template", "workflow"]);
+    let created = run_cli(root, &["new-definition-from-template", "workflow"]);
     assert!(
         created.status.success(),
         "{}",
         String::from_utf8_lossy(&created.stderr)
     );
-    let machine_path = root.join(".flow/machines/workflow.toml");
+    let definition_path = root.join(".flow/definitions/workflow.toml");
     assert_eq!(
-        fs::read_to_string(&machine_path).unwrap(),
-        include_str!("../templates/machine.toml")
+        fs::read_to_string(&definition_path).unwrap(),
+        include_str!("../templates/definition.toml")
     );
 
     let started = run_cli(root, &["start", "workflow", "run"]);
@@ -151,24 +179,24 @@ fn new_machine_from_template_creates_a_valid_local_definition() {
 }
 
 #[test]
-fn new_machine_from_template_supports_global_scope_without_overwriting() {
+fn new_definition_from_template_supports_global_scope_without_overwriting() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
 
-    let created = run_cli(root, &["new-machine-from-template", "workflow", "-g"]);
+    let created = run_cli(root, &["new-definition-from-template", "workflow", "-g"]);
     assert!(
         created.status.success(),
         "{}",
         String::from_utf8_lossy(&created.stderr)
     );
-    let machine_path = root.join("global/flow/machines/workflow.toml");
-    let original = fs::read_to_string(&machine_path).unwrap();
-    assert!(!root.join(".flow/machines/workflow.toml").exists());
+    let definition_path = root.join("global/flow/definitions/workflow.toml");
+    let original = fs::read_to_string(&definition_path).unwrap();
+    assert!(!root.join(".flow/definitions/workflow.toml").exists());
 
-    let duplicate = run_cli(root, &["new-machine-from-template", "workflow", "-g"]);
+    let duplicate = run_cli(root, &["new-definition-from-template", "workflow", "-g"]);
     assert!(!duplicate.status.success());
     assert!(String::from_utf8_lossy(&duplicate.stderr).contains("already exists"));
-    assert_eq!(fs::read_to_string(machine_path).unwrap(), original);
+    assert_eq!(fs::read_to_string(definition_path).unwrap(), original);
 
     let started = run_cli(root, &["start", "workflow", "run", "-g"]);
     assert!(
@@ -182,7 +210,7 @@ fn new_machine_from_template_supports_global_scope_without_overwriting() {
 fn new_creates_local_instance_that_can_be_loaded() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
+    write_local_definition(root);
 
     let output = run_cli(root, &["start", "workflow", "run"]);
     assert!(
@@ -195,7 +223,7 @@ fn new_creates_local_instance_that_can_be_loaded() {
     assert_eq!(
         fs::read_to_string(&instance_path).unwrap(),
         indoc! {r#"
-            machine = "workflow"
+            definition = "workflow"
             state = "Design"
         "#}
     );
@@ -213,8 +241,8 @@ fn new_creates_local_instance_that_can_be_loaded() {
 fn status_lists_local_and_global_instances_in_name_order() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
-    write_global_machine(root);
+    write_local_definition(root);
+    write_global_definition(root);
     assert!(
         run_cli(root, &["start", "workflow", "local-run"])
             .status
@@ -234,7 +262,7 @@ fn status_lists_local_and_global_instances_in_name_order() {
     );
     assert_eq!(
         String::from_utf8_lossy(&status.stdout),
-        "instance | machine | state\nglobal-run | workflow | Design\nlocal-run | workflow | Design\n"
+        "instance | definition | state\nglobal-run | workflow | Design\nlocal-run | workflow | Design\n"
     );
 }
 
@@ -242,7 +270,7 @@ fn status_lists_local_and_global_instances_in_name_order() {
 fn status_for_one_instance_reports_its_current_details() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
+    write_local_definition(root);
     assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
 
     let status = run_cli(root, &["status", "run"]);
@@ -253,21 +281,21 @@ fn status_for_one_instance_reports_its_current_details() {
     );
     assert_eq!(
         String::from_utf8_lossy(&status.stdout),
-        "instance: run\nmachine: workflow\nstate: Design\n"
+        "instance: run\ndefinition: workflow\nstate: Design\n"
     );
 }
 
 #[test]
-fn status_displays_machine_state_and_next_state_metadata() {
+fn status_displays_definition_state_and_next_state_metadata() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    let machine_path = root.join(".flow/machines/workflow.toml");
-    fs::create_dir_all(machine_path.parent().unwrap()).unwrap();
+    let definition_path = root.join(".flow/definitions/workflow.toml");
+    fs::create_dir_all(definition_path.parent().unwrap()).unwrap();
     fs::write(
-        &machine_path,
+        &definition_path,
         indoc! {r#"
             summary = "Whole workflow summary"
-            details = "Machine-wide details"
+            details = "Definition-wide details"
             steps = ["Always do this", "Consider this when relevant"]
             initial_state = "Draft"
 
@@ -297,11 +325,11 @@ fn status_displays_machine_state_and_next_state_metadata() {
         String::from_utf8_lossy(&status.stdout),
         indoc! {"\
             instance: run
-            machine: workflow
+            definition: workflow
             state: Draft
-            machine summary: Whole workflow summary
-            machine details: Machine-wide details
-            machine steps:
+            definition summary: Whole workflow summary
+            definition details: Definition-wide details
+            definition steps:
               - Always do this
               - Consider this when relevant
             state summary: Prepare the work
@@ -319,9 +347,13 @@ fn status_displays_machine_state_and_next_state_metadata() {
 fn bundled_workflow_definition_loads() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    let machine_path = root.join(".flow/machines/workflow.toml");
-    fs::create_dir_all(machine_path.parent().unwrap()).unwrap();
-    fs::write(&machine_path, include_str!("../../.flow/machines/workflow.toml")).unwrap();
+    let definition_path = root.join(".flow/definitions/workflow.toml");
+    fs::create_dir_all(definition_path.parent().unwrap()).unwrap();
+    fs::write(
+        &definition_path,
+        include_str!("../../.flow/definitions/workflow.toml"),
+    )
+    .unwrap();
 
     let started = run_cli(root, &["start", "workflow", "run"]);
     assert!(
@@ -374,7 +406,7 @@ fn status_reports_when_no_instances_exist() {
 fn next_and_jump_persist_local_instance_state() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_movable_machine(&root.join(".flow/machines/workflow.toml"));
+    write_movable_definition(&root.join(".flow/definitions/workflow.toml"));
     assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
 
     let next = run_cli(root, &["next", "run", "Review"]);
@@ -388,7 +420,7 @@ fn next_and_jump_persist_local_instance_state() {
     assert_eq!(
         fs::read_to_string(root.join(".flow/instances/run.toml")).unwrap(),
         indoc! {r#"
-            machine = "workflow"
+            definition = "workflow"
             state = "Done"
         "#}
     );
@@ -398,7 +430,7 @@ fn next_and_jump_persist_local_instance_state() {
 fn rejected_moves_leave_instance_file_unchanged() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_movable_machine(&root.join(".flow/machines/workflow.toml"));
+    write_movable_definition(&root.join(".flow/definitions/workflow.toml"));
     assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
     let path = root.join(".flow/instances/run.toml");
     let original = fs::read_to_string(&path).unwrap();
@@ -416,7 +448,7 @@ fn rejected_moves_leave_instance_file_unchanged() {
 fn movement_updates_global_instance_without_creating_a_local_one() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_movable_machine(&root.join("global/flow/machines/workflow.toml"));
+    write_movable_definition(&root.join("global/flow/definitions/workflow.toml"));
     assert!(
         run_cli(root, &["start", "workflow", "run", "-g"])
             .status
@@ -437,7 +469,7 @@ fn movement_updates_global_instance_without_creating_a_local_one() {
 fn new_rejects_collision_in_global_scope() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
+    write_local_definition(root);
     let existing = root.join("global/flow/instances/run.toml");
     fs::create_dir_all(existing.parent().unwrap()).unwrap();
     fs::write(&existing, "original").unwrap();
@@ -450,21 +482,21 @@ fn new_rejects_collision_in_global_scope() {
 }
 
 #[test]
-fn new_requires_machine_before_creating_instance_file() {
+fn new_requires_definition_before_creating_instance_file() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
 
     let output = run_cli(root, &["start", "workflow", "run"]);
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("machine \"workflow\" not found"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("definition \"workflow\" not found"));
     assert!(!root.join(".flow/instances").exists());
 }
 
 #[test]
-fn new_generates_machine_prefixed_instance_name_that_can_be_loaded() {
+fn new_generates_definition_prefixed_instance_name_that_can_be_loaded() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
+    write_local_definition(root);
 
     let created = run_cli(root, &["start", "workflow"]);
     assert!(
@@ -502,10 +534,10 @@ fn new_generates_machine_prefixed_instance_name_that_can_be_loaded() {
 }
 
 #[test]
-fn new_global_creates_instance_with_global_machine() {
+fn new_global_creates_instance_with_global_definition() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_global_machine(root);
+    write_global_definition(root);
 
     let output = run_cli(root, &["start", "workflow", "run", "-g"]);
     assert!(
@@ -516,7 +548,7 @@ fn new_global_creates_instance_with_global_machine() {
     assert_eq!(
         fs::read_to_string(root.join("global/flow/instances/run.toml")).unwrap(),
         indoc! {r#"
-            machine = "workflow"
+            definition = "workflow"
             state = "Design"
         "#}
     );
@@ -531,11 +563,11 @@ fn new_global_creates_instance_with_global_machine() {
 }
 
 #[test]
-fn new_copy_machine_installs_local_definition_and_creates_global_instance() {
+fn new_copy_definition_installs_local_definition_and_creates_global_instance() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
-    let local_machine = root.join(".flow/machines/workflow.toml");
+    write_local_definition(root);
+    let local_definition = root.join(".flow/definitions/workflow.toml");
 
     let output = run_cli(root, &["start", "workflow", "run", "-G"]);
     assert!(
@@ -544,8 +576,8 @@ fn new_copy_machine_installs_local_definition_and_creates_global_instance() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(
-        fs::read_to_string(root.join("global/flow/machines/workflow.toml")).unwrap(),
-        fs::read_to_string(local_machine).unwrap()
+        fs::read_to_string(root.join("global/flow/definitions/workflow.toml")).unwrap(),
+        fs::read_to_string(local_definition).unwrap()
     );
     assert!(!root.join(".flow/instances/run.toml").exists());
     let loaded = run_cli(root, &["status", "run"]);
@@ -557,19 +589,19 @@ fn new_copy_machine_installs_local_definition_and_creates_global_instance() {
 }
 
 #[test]
-fn new_copy_machine_keeps_existing_global_definition() {
+fn new_copy_definition_keeps_existing_global_definition() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
-    let global_machine = root.join("global/flow/machines/workflow.toml");
-    fs::create_dir_all(global_machine.parent().unwrap()).unwrap();
+    write_local_definition(root);
+    let global_definition = root.join("global/flow/definitions/workflow.toml");
+    fs::create_dir_all(global_definition.parent().unwrap()).unwrap();
     let existing = indoc! {r#"
         initial_state = "Review"
         [[states]]
         name = "Review"
         next = []
     "#};
-    fs::write(&global_machine, existing).unwrap();
+    fs::write(&global_definition, existing).unwrap();
 
     let output = run_cli(root, &["start", "workflow", "run", "-G"]);
     assert!(
@@ -577,15 +609,15 @@ fn new_copy_machine_keeps_existing_global_definition() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(fs::read_to_string(global_machine).unwrap(), existing);
+    assert_eq!(fs::read_to_string(global_definition).unwrap(), existing);
     assert!(root.join("global/flow/instances/run.toml").is_file());
 }
 
 #[test]
-fn new_copy_machine_checks_instance_collision_before_copy() {
+fn new_copy_definition_checks_instance_collision_before_copy() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
+    write_local_definition(root);
     let existing = root.join(".flow/instances/run.toml");
     fs::create_dir_all(existing.parent().unwrap()).unwrap();
     fs::write(&existing, "original").unwrap();
@@ -593,50 +625,53 @@ fn new_copy_machine_checks_instance_collision_before_copy() {
     let output = run_cli(root, &["start", "workflow", "run", "-G"]);
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("already exists"));
-    assert!(!root.join("global/flow/machines/workflow.toml").exists());
+    assert!(!root.join("global/flow/definitions/workflow.toml").exists());
     assert_eq!(fs::read_to_string(existing).unwrap(), "original");
 }
 
 #[test]
-fn new_copy_machine_rejects_invalid_existing_global_definition() {
+fn new_copy_definition_rejects_invalid_existing_global_definition() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
-    let global_machine = root.join("global/flow/machines/workflow.toml");
-    fs::create_dir_all(global_machine.parent().unwrap()).unwrap();
-    fs::write(&global_machine, "invalid toml = ").unwrap();
+    write_local_definition(root);
+    let global_definition = root.join("global/flow/definitions/workflow.toml");
+    fs::create_dir_all(global_definition.parent().unwrap()).unwrap();
+    fs::write(&global_definition, "invalid toml = ").unwrap();
 
     let output = run_cli(root, &["start", "workflow", "run", "-G"]);
     assert!(!output.status.success());
-    assert_eq!(fs::read_to_string(global_machine).unwrap(), "invalid toml = ");
+    assert_eq!(fs::read_to_string(global_definition).unwrap(), "invalid toml = ");
     assert!(!root.join("global/flow/instances/run.toml").exists());
 }
 
 #[test]
-fn new_global_requires_global_machine_even_if_local_exists() {
+fn new_global_requires_global_definition_even_if_local_exists() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
+    write_local_definition(root);
 
     let output = run_cli(root, &["start", "workflow", "run", "-g"]);
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
-    assert!(error.contains("global machine \"workflow\" not found"), "{error}");
-    assert!(error.contains("global/flow/machines/workflow.toml"), "{error}");
+    assert!(
+        error.contains("global definition \"workflow\" not found"),
+        "{error}"
+    );
+    assert!(error.contains("global/flow/definitions/workflow.toml"), "{error}");
     assert!(!root.join("global/flow/instances/run.toml").exists());
 }
 
 #[test]
-fn new_global_rejects_invalid_global_machine() {
+fn new_global_rejects_invalid_global_definition() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    write_local_machine(root);
-    let global_machine = root.join("global/flow/machines/workflow.toml");
-    fs::create_dir_all(global_machine.parent().unwrap()).unwrap();
-    fs::write(&global_machine, "invalid toml = ").unwrap();
+    write_local_definition(root);
+    let global_definition = root.join("global/flow/definitions/workflow.toml");
+    fs::create_dir_all(global_definition.parent().unwrap()).unwrap();
+    fs::write(&global_definition, "invalid toml = ").unwrap();
 
     let output = run_cli(root, &["start", "workflow", "run", "-g"]);
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("global/flow/machines/workflow.toml"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("global/flow/definitions/workflow.toml"));
     assert!(!root.join("global/flow/instances/run.toml").exists());
 }

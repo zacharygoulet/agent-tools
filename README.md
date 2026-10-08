@@ -15,13 +15,13 @@ cargo test -p flow
 cargo run -p flow -- --help
 ```
 
-Machines live in `.flow/machines/` or
-`$XDG_STATE_HOME/flow/machines/` (default `~/.local/state/flow/machines/`).
-Create a machine from the bundled three-state template, then edit
-`.flow/machines/workflow.toml` as needed:
+Definitions live in `.flow/definitions/` or
+`$XDG_STATE_HOME/flow/definitions/` (default `~/.local/state/flow/definitions/`).
+Create a definition from the bundled three-state template, then edit
+`.flow/definitions/workflow.toml` as needed:
 
 ```sh
-cargo run -p flow -- new-machine-from-template workflow
+cargo run -p flow -- new-definition-from-template workflow
 ```
 
 Then create, move, and inspect an instance:
@@ -36,6 +36,6 @@ cargo run -p flow -- status run
 
 Use `jump` instead of `next` for an exceptional move to any defined state.
 Instances are stored in `.flow/instances/` (with `.toml` files) by default. Use `start -g` for
-user-wide instance storage, or `start -G` to copy a missing local machine
-definition into global storage first. Add `-g` to
-`new-machine-from-template` to create a global machine definition.
+user-wide instance storage, or `start -G` to copy a missing local definition
+into global storage first. Add `-g` to
+`new-definition-from-template` to create a global definition.

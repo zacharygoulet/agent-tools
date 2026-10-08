@@ -1,7 +1,7 @@
 use std::{fmt, str::FromStr};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct MachineName(String);
+pub struct DefinitionName(String);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct InstanceName(String);
@@ -61,17 +61,17 @@ macro_rules! impl_name {
     };
 }
 
-impl_name!(MachineName, "machine");
+impl_name!(DefinitionName, "definition");
 impl_name!(InstanceName, "instance");
 
 #[cfg(test)]
 mod tests {
-    use super::{InstanceName, MachineName};
+    use super::{DefinitionName, InstanceName};
 
     #[test]
     fn accepts_safe_slugs() {
         for value in ["workflow", "a-b_c.d", "0start"] {
-            assert_eq!(MachineName::parse(value).unwrap().as_str(), value);
+            assert_eq!(DefinitionName::parse(value).unwrap().as_str(), value);
             assert_eq!(InstanceName::parse(value).unwrap().as_str(), value);
         }
     }
@@ -79,7 +79,7 @@ mod tests {
     #[test]
     fn rejects_invalid_slugs() {
         for value in ["", "-start", "_start", ".", "..", "a/b", "a\\b", "a b", "é"] {
-            assert!(MachineName::parse(value).is_err());
+            assert!(DefinitionName::parse(value).is_err());
             assert!(InstanceName::parse(value).is_err());
         }
     }

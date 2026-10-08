@@ -6,21 +6,21 @@ use crate::InstanceName;
 
 #[derive(Clone, Copy, Debug)]
 enum StorageFile {
-    Machine,
+    Definition,
     Instance,
 }
 
 impl StorageFile {
     fn label(self) -> &'static str {
         match self {
-            Self::Machine => "machine",
+            Self::Definition => "definition",
             Self::Instance => "instance",
         }
     }
 
     fn directory(self) -> &'static str {
         match self {
-            Self::Machine => "machines",
+            Self::Definition => "definitions",
             Self::Instance => "instances",
         }
     }
@@ -60,38 +60,47 @@ impl Storage {
         Self { local: cwd.join(".flow"), global: state_home.join("flow") }
     }
 
-    pub fn find_machine(&self, name: &str) -> PathBuf {
-        self.find(name, StorageFile::Machine)
+    pub fn find_definition(&self, name: &str) -> PathBuf {
+        self.find(name, StorageFile::Definition)
     }
 
     pub fn find_instance(&self, name: &str) -> PathBuf {
         self.find(name, StorageFile::Instance)
     }
 
-    pub fn find_local_machine(&self, name: &str) -> PathBuf {
-        let path = self.path(name, StorageFile::Machine, Scope::Local);
+    pub fn find_local_definition(&self, name: &str) -> PathBuf {
+        let path = self.path(name, StorageFile::Definition, Scope::Local);
         if !path.exists() {
-            raise::raise(format!("local machine {name:?} not found at {}", path.display()));
+            raise::raise(format!(
+                "local definition {name:?} not found at {}",
+                path.display()
+            ));
         }
         path
     }
 
-    pub fn find_global_machine(&self, name: &str) -> PathBuf {
-        let path = self.global_machine_path(name);
+    pub fn find_global_definition(&self, name: &str) -> PathBuf {
+        let path = self.global_definition_path(name);
         if !path.exists() {
-            raise::raise(format!("global machine {name:?} not found at {}", path.display()));
+            raise::raise(format!(
+                "global definition {name:?} not found at {}",
+                path.display()
+            ));
         }
         path
     }
 
-    pub fn global_machine_path(&self, name: &str) -> PathBuf {
-        self.path(name, StorageFile::Machine, Scope::Global)
+    pub fn global_definition_path(&self, name: &str) -> PathBuf {
+        self.path(name, StorageFile::Definition, Scope::Global)
     }
 
-    pub fn new_machine_path(&self, name: &str, scope: Scope) -> PathBuf {
-        let path = self.path(name, StorageFile::Machine, scope);
+    pub fn new_definition_path(&self, name: &str, scope: Scope) -> PathBuf {
+        let path = self.path(name, StorageFile::Definition, scope);
         if path.exists() {
-            raise::raise(format!("machine {name:?} already exists at {}", path.display()));
+            raise::raise(format!(
+                "definition {name:?} already exists at {}",
+                path.display()
+            ));
         }
         path
     }
@@ -229,32 +238,32 @@ mod tests {
     }
 
     #[test]
-    fn finds_machine_locally_then_globally() {
+    fn finds_definition_locally_then_globally() {
         let root = tempfile::tempdir().unwrap();
-        let local = root.path().join(".flow/machines/workflow.toml");
-        let global = root.path().join("global/flow/machines/workflow.toml");
+        let local = root.path().join(".flow/definitions/workflow.toml");
+        let global = root.path().join("global/flow/definitions/workflow.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::create_dir_all(global.parent().unwrap()).unwrap();
         fs::write(&global, "global").unwrap();
 
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert_eq!(storage.find_machine("workflow"), global);
+        assert_eq!(storage.find_definition("workflow"), global);
         fs::write(&local, "local").unwrap();
-        assert_eq!(storage.find_machine("workflow"), local);
+        assert_eq!(storage.find_definition("workflow"), local);
     }
 
     #[test]
-    fn finds_machine_in_global_storage_only() {
+    fn finds_definition_in_global_storage_only() {
         let root = tempfile::tempdir().unwrap();
-        let local = root.path().join(".flow/machines/workflow.toml");
+        let local = root.path().join(".flow/definitions/workflow.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::write(&local, "local").unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert!(catch_raised(|| storage.find_global_machine("workflow")).is_err());
-        let global = storage.global_machine_path("workflow");
+        assert!(catch_raised(|| storage.find_global_definition("workflow")).is_err());
+        let global = storage.global_definition_path("workflow");
         fs::create_dir_all(global.parent().unwrap()).unwrap();
         fs::write(&global, "global").unwrap();
-        assert_eq!(storage.find_global_machine("workflow"), global);
+        assert_eq!(storage.find_global_definition("workflow"), global);
     }
 
     #[test]

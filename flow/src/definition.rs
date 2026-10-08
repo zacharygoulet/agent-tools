@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    Instance, InstanceName, MachineName,
+    DefinitionName, Instance, InstanceName,
     file_writer::FileWriter,
     storage::{Scope, Storage},
 };
@@ -15,9 +15,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, getset::Getters)]
 #[serde(deny_unknown_fields)]
 #[getset(get = "pub")]
-pub struct Machine {
-    #[serde(skip, default = "MachineName::placeholder")]
-    name: MachineName,
+pub struct Definition {
+    #[serde(skip, default = "DefinitionName::placeholder")]
+    name: DefinitionName,
     initial_state: StateName,
     states: Vec<State>,
     #[serde(default)]
@@ -44,11 +44,12 @@ pub struct State {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct StateName(pub String);
 
-impl Machine {
-    pub fn new(name: MachineName, initial_state: StateName, states: Vec<State>) -> Self {
-        let machine = Self { name, initial_state, states, summary: None, details: None, steps: Vec::new() };
-        machine.validate_at(None);
-        machine
+impl Definition {
+    pub fn new(name: DefinitionName, initial_state: StateName, states: Vec<State>) -> Self {
+        let definition =
+            Self { name, initial_state, states, summary: None, details: None, steps: Vec::new() };
+        definition.validate_at(None);
+        definition
     }
 
     pub fn into_new_instance(self, name: InstanceName) -> Instance {
@@ -90,22 +91,22 @@ impl Machine {
         }
     }
 
-    pub fn create_from_template(name: MachineName, contents: &str, scope: Scope) -> PathBuf {
-        let path = Storage::current().new_machine_path(name.as_str(), scope);
+    pub fn create_from_template(name: DefinitionName, contents: &str, scope: Scope) -> PathBuf {
+        let path = Storage::current().new_definition_path(name.as_str(), scope);
         Self::parse(&path, contents);
         FileWriter::from(path.clone()).write_new(contents.as_bytes());
         path
     }
 
     pub fn load_from_name(name: &str) -> Self {
-        let name = MachineName::parse(name).raise();
-        let path = Storage::current().find_machine(name.as_str());
+        let name = DefinitionName::parse(name).raise();
+        let path = Storage::current().find_definition(name.as_str());
         Self::parse_from_path(&path)
     }
 
     pub fn load_global_from_name(name: &str) -> Self {
-        let name = MachineName::parse(name).raise();
-        Self::parse_from_path(&Storage::current().find_global_machine(name.as_str()))
+        let name = DefinitionName::parse(name).raise();
+        Self::parse_from_path(&Storage::current().find_global_definition(name.as_str()))
     }
 
     pub fn ensure_global_definition(&self) {
@@ -114,13 +115,13 @@ impl Machine {
 
     pub fn install_global_from_local_if_missing(&self) {
         let storage = Storage::current();
-        let destination = storage.global_machine_path(self.name.as_str());
+        let destination = storage.global_definition_path(self.name.as_str());
         if destination.exists() {
             Self::parse_from_path(&destination);
             return;
         }
 
-        let source = storage.find_local_machine(self.name.as_str());
+        let source = storage.find_local_definition(self.name.as_str());
         let contents =
             fs::read_to_string(&source).raise_with_context(|| format!("reading {}", source.display()));
         Self::parse(&source, &contents);
@@ -133,14 +134,14 @@ impl Machine {
     }
 
     fn parse(path: &Path, contents: &str) -> Self {
-        let mut definition: Machine =
+        let mut definition: Definition =
             toml::from_str(contents).raise_with_context(|| format!("parsing {}", path.display()));
 
         let name = path
             .file_stem()
             .and_then(|name| name.to_str())
-            .expect("machine definition paths must have a UTF-8 filename");
-        definition.name = MachineName::parse(name).raise();
+            .expect("definition paths must have a UTF-8 filename");
+        definition.name = DefinitionName::parse(name).raise();
         definition.validate_at(Some(path));
         definition
     }
@@ -152,8 +153,8 @@ mod tests {
 
     use indoc::indoc;
 
-    use super::{Machine, State, StateName};
-    use crate::MachineName;
+    use super::{Definition, State, StateName};
+    use crate::DefinitionName;
     use rust_utils::raise::catch_raised;
 
     fn raised_message<T: std::fmt::Debug>(operation: impl FnOnce() -> T) -> String {
@@ -166,9 +167,9 @@ mod tests {
         State { name: name.to_owned(), next, summary: None, details: None, steps: Vec::new() }
     }
 
-    fn machine(initial_state: &str, states: Vec<State>) -> Machine {
-        Machine {
-            name: MachineName::parse("example").unwrap(),
+    fn definition(initial_state: &str, states: Vec<State>) -> Definition {
+        Definition {
+            name: DefinitionName::parse("example").unwrap(),
             initial_state: StateName(initial_state.to_owned()),
             states,
             summary: None,
@@ -179,35 +180,35 @@ mod tests {
 
     #[test]
     fn missing_next_defaults_to_no_transitions() {
-        let machine: Machine =
+        let definition: Definition =
             toml::from_str("initial_state = \"Done\"\n\n[[states]]\nname = \"Done\"\n").unwrap();
-        machine.validate();
-        assert!(machine.states()[0].next.is_empty());
+        definition.validate();
+        assert!(definition.states()[0].next.is_empty());
     }
 
     #[test]
     fn rejects_empty_state_names() {
-        let machine = machine(" ", vec![state(" ", vec![])]);
-        assert!(raised_message(|| machine.validate()).contains("state names cannot be empty"));
+        let definition = definition(" ", vec![state(" ", vec![])]);
+        assert!(raised_message(|| definition.validate()).contains("state names cannot be empty"));
     }
 
     #[test]
     fn rejects_duplicate_names() {
-        let machine = machine("draft", vec![state("draft", vec![]), state("draft", vec![])]);
-        assert!(raised_message(|| machine.validate()).contains("duplicate state"));
+        let definition = definition("draft", vec![state("draft", vec![]), state("draft", vec![])]);
+        assert!(raised_message(|| definition.validate()).contains("duplicate state"));
     }
 
     #[test]
     fn rejects_unknown_next_state() {
-        let machine = machine("draft", vec![state("draft", vec![StateName("missing".into())])]);
-        assert!(raised_message(|| machine.validate()).contains("unknown next state"));
+        let definition = definition("draft", vec![state("draft", vec![StateName("missing".into())])]);
+        assert!(raised_message(|| definition.validate()).contains("unknown next state"));
     }
 
     #[test]
     fn rejects_unknown_initial_state() {
-        let machine = machine("Missing", vec![state("Design", vec![])]);
+        let definition = definition("Missing", vec![state("Design", vec![])]);
 
-        assert!(raised_message(|| machine.validate()).contains("unknown initial state"));
+        assert!(raised_message(|| definition.validate()).contains("unknown initial state"));
     }
 
     #[test]
@@ -226,6 +227,6 @@ mod tests {
         )
         .unwrap();
 
-        assert!(raised_message(|| Machine::parse_from_path(&path)).contains("unknown field"));
+        assert!(raised_message(|| Definition::parse_from_path(&path)).contains("unknown field"));
     }
 }

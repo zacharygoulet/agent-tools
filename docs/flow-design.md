@@ -9,21 +9,21 @@ integrating it with Pi.
 
 ## Agreed model
 
-- `Machine` is a reusable definition with an `initial_state` and states.
+- `Definition` describes a reusable flow with an `initial_state` and states.
   Each `State` lists zero or more normal `next` destinations.
   `Next(target)` chooses one of those destinations; `JumpTo(target)` is an
   explicit exceptional move to any defined state. `Instance::apply_move`
   changes an instance in memory; `Instance::apply_saved_move` reloads and
   persists a named instance. Movement history is not recorded.
-- An `Instance` has one current state and owns its loaded `Machine` in
+- An `Instance` has one current state and owns its loaded `Definition` in
   memory. The caller proposes moves for the engine to validate and apply.
   It does not execute workflow steps, prompt the user, run commands, or
-  advance automatically. `Machine::into_new_instance(name)` consumes a
-  machine and creates an in-memory instance at its initial state.
-- Machine construction/loading rejects duplicate state names, an unknown
+  advance automatically. `Definition::into_new_instance(name)` consumes a
+  flow definition and creates an in-memory instance at its initial state.
+- Definition construction/loading rejects duplicate state names, an unknown
   initial state, and unknown normal-next targets. Instance construction
-  validates its machine; loading checks that the current state exists in the
-  loaded machine. Instance and machine fields are not publicly mutable, so
+  validates its definition; loading checks that the current state exists in the
+  loaded definition. Instance and definition fields are not publicly mutable, so
   normal API use preserves these invariants between moves. Direct Serde
   deserialization can still bypass constructor validation.
 - Persistent per-instance **context** is planned for facts callers need
@@ -33,45 +33,45 @@ integrating it with Pi.
 
 ## Files and lookup
 
-- Local files are in `.flow/{machines,instances}/` with `.toml` extensions; global files are in
-  `$XDG_STATE_HOME/flow/{machines,instances}/`, defaulting to
+- Local files are in `.flow/{definitions,instances}/` with `.toml` extensions;
+  global files are in `$XDG_STATE_HOME/flow/{definitions,instances}/`, defaulting to
   `~/.local/state/flow/`. Lookup is local-first and falls back globally only
   if the local path is absent, even for a globally stored instance.
-  Consequently a local same-named machine can shadow a global definition.
-- Machine TOML contains `initial_state` and `[[states]]` entries with `name`
-  and `next`. Machine and state definitions may also include `summary`,
-  `details` and `steps`. These are static guidance, not tracked checklists or
-  transition guards. Step optionality can be expressed in the step or its details.
-  Machine-level guidance applies across states; state-level guidance is specific
-  to that state. The
-  instance status displays machine and current-state guidance, plus summaries
-  for immediate next states. Instance TOML contains only `machine` and `state`.
-  Each file gets its own name from its filename without the `.toml` extension, not from a field inside the file.
-- `flow start <machine-name> [instance-name]` creates an instance and accepts
+  Consequently a local same-named definition can shadow a global definition.
+- Definition TOML contains `initial_state` and `[[states]]` entries with `name`
+  and `next`. Definitions and states may also include `summary`, `details`,
+  and `steps`. These are static guidance, not tracked checklists or transition
+  guards. Step optionality can be expressed in the step or its details.
+  Definition-level guidance applies across states; state-level guidance is
+  specific to that state. Instance status displays definition and current-state
+  guidance, plus summaries for immediate next states. Instance TOML contains
+  only `definition` and `state`. Each file gets its name from its filename
+  without the `.toml` extension, not from a field inside the file.
+- `flow start <definition-name> [instance-name]` creates an instance and accepts
   an optional instance name. When omitted, it generates
-  `<machine-name>-<32-hex-digit-UUID>`.
-  `flow new-machine-from-template <machine-name> [-g]` creates a machine
-  definition from `flow/templates/machine.toml`, locally by default or
+  `<definition-name>-<32-hex-digit-UUID>`.
+  `flow new-definition-from-template <definition-name> [-g]` creates a definition
+  from `flow/templates/definition.toml`, locally by default or
   globally with `-g`. It does not overwrite an existing definition in the
   destination scope.
-  `flow status` lists stored instances with their machine and state;
+  `flow status` lists stored instances with their definition and state;
   `flow status [instance-name]` reports the known details for one instance.
   Local instances shadow same-named
   global instances in the listing, matching lookup behavior.
   `flow next <instance-name> <state>` follows a listed transition;
   `flow jump <instance-name> <state>` moves to any defined state.
   Explicit names cannot collide with instances visible in either scope.
-  Generated names are machine-prefixed random UUIDs. UUID collisions are
+  Generated names are definition-prefixed random UUIDs. UUID collisions are
   negligibly likely; persistence still uses no-overwrite creation.
-- `start -g` stores the instance globally and requires a valid global machine
+- `start -g` stores the instance globally and requires a valid global
   definition. `start -G` implies global storage and copies a valid local
-  machine definition if the global one is absent. It never replaces an
+  definition if the global one is absent. It never replaces an
   existing global definition. Instance-name collisions are checked before
-  copying; if instance creation later fails, an installed machine is left
+  copying; if instance creation later fails, an installed definition is left
   in place rather than risking deletion of a definition another process
-  might use. The instance still loads its machine local-first.
+  might use. The instance still loads its definition local-first.
 - `Instance::save_new(InstanceSavePolicy)` resolves the destination, applies
-  the global-machine requirement or copy option, then writes through a
+  the global-definition requirement or copy option, then writes through a
   temporary file with no-overwrite persistence. Saved moves reload the
   instance and atomically replace that same path after validation, without
   recording history. Simultaneous writers are not coordinated and can lose
@@ -84,21 +84,23 @@ integrating it with Pi.
 ## Current state and next engine work
 
 The workspace contains the `flow` crate with `start`,
-`new-machine-from-template`, and `status`; validated machine definitions;
+`new-definition-from-template`, and `status`; validated definitions;
 in-memory and durable movement; CLI tests; and a panic-catching `main`.
 The temporary demonstration panic was removed when the crate moved here.
-Current verification passes formatting, Clippy, 47 tests, and CLI help plus
-machine-template and start/status smoke tests. There is no movement history,
+Verification includes formatting, Clippy, CLI tests, and definition-template
+and start/status smoke tests. There is no movement history,
 context storage, or Pi extension yet.
-Generated instance names use machine-prefixed random UUIDs.
+Generated instance names use definition-prefixed random UUIDs.
 The old `.agent-sm` storage paths were renamed to `.flow`; other projects'
-old local files were not migrated automatically.
+old local files were not migrated automatically. The later `machines` to
+`definitions` rename is a clean break: old paths, the instance `machine` key,
+and old CLI names are not supported.
 
-The first requested style pass introduced distinct validated `MachineName`
-and `InstanceName` types. Machine and instance names use ASCII letters, digits,
+The first requested style pass introduced distinct validated `DefinitionName`
+and `InstanceName` types. Definition and instance names use ASCII letters, digits,
 `-`, `_`, and `.`, with an alphanumeric first character. CLI parsing and public
 load/creation boundaries validate these names. State names remain
-human-readable, but machine validation rejects empty/whitespace-only and
+human-readable, but definition validation rejects empty/whitespace-only and
 duplicate state names. Moving CLI command handlers onto command types remains
 open. A second general style change was mentioned but not specified. Return to
 Design with Zach before implementing each new slice; test and review before
@@ -119,5 +121,5 @@ cargo run -p flow -- --help
 ```
 
 The code is on branch `task/0034-scriptify-the-workflow` in this repository.
-See the workspace [README](../README.md) for machine-template and
+See the workspace [README](../README.md) for definition-template and
 `start`/`status` examples.
