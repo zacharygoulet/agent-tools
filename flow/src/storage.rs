@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, env, fs, path::PathBuf};
 
 use rust_utils::raise::{self, RaiseContext};
 
-use crate::InstanceName;
+use crate::{DefinitionName, InstanceName};
 
 #[derive(Clone, Copy, Debug)]
 enum StorageFile {
@@ -105,11 +105,25 @@ impl Storage {
         path
     }
 
+    pub fn definition_names(&self) -> Vec<DefinitionName> {
+        self.file_names(StorageFile::Definition)
+            .into_iter()
+            .map(|name| DefinitionName::parse(name).expect("definition names were validated"))
+            .collect()
+    }
+
     pub fn instance_names(&self) -> Vec<InstanceName> {
+        self.file_names(StorageFile::Instance)
+            .into_iter()
+            .map(|name| InstanceName::parse(name).expect("instance names were validated"))
+            .collect()
+    }
+
+    fn file_names(&self, storage_file: StorageFile) -> Vec<String> {
         let mut names = BTreeSet::new();
         for directory in [
-            self.local.join(StorageFile::Instance.directory()),
-            self.global.join(StorageFile::Instance.directory()),
+            self.local.join(storage_file.directory()),
+            self.global.join(storage_file.directory()),
         ] {
             if !directory.exists() {
                 continue;
@@ -133,15 +147,22 @@ impl Storage {
                 else {
                     continue;
                 };
-                InstanceName::parse(name.clone())
-                    .raise_with_context(|| format!("invalid instance filename in {}", directory.display()));
+                match storage_file {
+                    StorageFile::Definition => {
+                        DefinitionName::parse(name.clone()).raise_with_context(|| {
+                            format!("invalid definition filename in {}", directory.display())
+                        });
+                    }
+                    StorageFile::Instance => {
+                        InstanceName::parse(name.clone()).raise_with_context(|| {
+                            format!("invalid instance filename in {}", directory.display())
+                        });
+                    }
+                }
                 names.insert(name);
             }
         }
-        names
-            .into_iter()
-            .map(|name| InstanceName::parse(name).expect("instance names were validated"))
-            .collect()
+        names.into_iter().collect()
     }
 
     pub fn new_instance_path(&self, name: &str, scope: Scope) -> PathBuf {

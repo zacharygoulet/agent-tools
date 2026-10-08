@@ -91,13 +91,15 @@ fn loads_instance_with_separate_definition_file() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        indoc! {r#"
-            instance: run
-            definition: workflow
-            state: Design
-        "#}
+    let status = String::from_utf8_lossy(&output.stdout);
+    assert!(status.contains("instance: run\nglobal:\n  details:"), "{status}");
+    assert!(
+        status.contains("  steps:\n    - Drive the flow proactively"),
+        "{status}"
+    );
+    assert!(
+        status.contains("definition: workflow\nstate: Design\n"),
+        "{status}"
     );
 }
 
@@ -267,6 +269,62 @@ fn status_lists_local_and_global_instances_in_name_order() {
 }
 
 #[test]
+fn lists_no_definitions_when_storage_is_empty() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run_cli(directory.path(), &["list", "definitions"]);
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "no definitions found\n");
+}
+
+#[test]
+fn lists_definitions_with_summaries_and_local_shadowing() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let local = root.join(".flow/definitions/workflow.toml");
+    let global = root.join("global/flow/definitions/workflow.toml");
+    write_definition(&local);
+    write_definition(&global);
+    fs::write(
+        &local,
+        "summary = 'Local workflow'\ninitial_state = 'Done'\n[[states]]\nname = 'Done'\n",
+    )
+    .unwrap();
+    fs::write(&global, "invalid TOML = ").unwrap();
+    write_definition(&root.join("global/flow/definitions/other.toml"));
+
+    let output = run_cli(root, &["list", "definitions"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "definition | summary\nother | \nworkflow | Local workflow\n"
+    );
+}
+
+#[test]
+fn lists_states_with_summaries_in_definition_order() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let path = root.join(".flow/definitions/workflow.toml");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, "initial_state = 'Draft'\n[[states]]\nname = 'Draft'\nsummary = 'Start here'\n[[states]]\nname = 'Review'\n").unwrap();
+
+    let output = run_cli(root, &["list", "states", "workflow"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "state | summary\nDraft | Start here\nReview | \n"
+    );
+}
+
+#[test]
 fn status_for_one_instance_reports_its_current_details() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
@@ -279,9 +337,11 @@ fn status_for_one_instance_reports_its_current_details() {
         "{}",
         String::from_utf8_lossy(&status.stderr)
     );
-    assert_eq!(
-        String::from_utf8_lossy(&status.stdout),
-        "instance: run\ndefinition: workflow\nstate: Design\n"
+    let output = String::from_utf8_lossy(&status.stdout);
+    assert!(output.contains("global:\n  details:"), "{output}");
+    assert!(
+        output.contains("definition: workflow\nstate: Design\n"),
+        "{output}"
     );
 }
 
@@ -294,6 +354,7 @@ fn status_displays_definition_state_and_next_state_metadata() {
     fs::write(
         &definition_path,
         indoc! {r#"
+            use_global = false
             summary = "Whole workflow summary"
             details = "Definition-wide details"
             steps = ["Always do this", "Consider this when relevant"]
@@ -321,22 +382,23 @@ fn status_displays_definition_state_and_next_state_metadata() {
         "{}",
         String::from_utf8_lossy(&status.stderr)
     );
+    assert!(!String::from_utf8_lossy(&status.stdout).contains("global:"));
     assert_eq!(
         String::from_utf8_lossy(&status.stdout),
         indoc! {"\
             instance: run
             definition: workflow
+              summary: Whole workflow summary
+              details: Definition-wide details
+              steps:
+                - Always do this
+                - Consider this when relevant
             state: Draft
-            definition summary: Whole workflow summary
-            definition details: Definition-wide details
-            definition steps:
-              - Always do this
-              - Consider this when relevant
-            state summary: Prepare the work
-            state details: Current-state details
-            state steps:
-              - Confirm the goal
-              - Check for existing work
+              summary: Prepare the work
+              details: Current-state details
+              steps:
+                - Confirm the goal
+                - Check for existing work
             next states:
               - Review: Review the work
         "}
@@ -370,8 +432,9 @@ fn bundled_workflow_definition_loads() {
     );
     let output = String::from_utf8_lossy(&status.stdout);
     assert!(output.contains("state: Select"), "{output}");
-    assert!(output.contains("state details:"), "{output}");
-    assert!(output.contains("state steps:"), "{output}");
+    assert!(output.contains("state: Select\n  summary:"), "{output}");
+    assert!(output.contains("  details:"), "{output}");
+    assert!(output.contains("  steps:"), "{output}");
 
     for state in [
         "Define",
@@ -387,6 +450,11 @@ fn bundled_workflow_definition_loads() {
             "{}",
             String::from_utf8_lossy(&moved.stderr)
         );
+        let status = run_cli(root, &["status", "run"]);
+        assert!(status.status.success());
+        let output = String::from_utf8_lossy(&status.stdout);
+        assert!(output.contains("global:\n  details:"), "{output}");
+        assert!(output.contains(&format!("state: {state}\n")), "{output}");
     }
 }
 

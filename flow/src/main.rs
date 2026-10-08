@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use flow::{
-    ContextUpdate, Definition, DefinitionName, Instance, InstanceName, InstanceSavePolicy, Move, Scope,
-    StateName,
+    ContextUpdate, Definition, DefinitionName, GlobalGuidance, Instance, InstanceName, InstanceSavePolicy,
+    Move, Scope, StateName, Storage,
 };
 use rust_utils::raise::RaiseExt;
 use uuid::Uuid;
@@ -35,6 +35,11 @@ enum Cli {
         instance_name: Option<InstanceName>,
     },
 
+    List {
+        #[command(subcommand)]
+        target: ListTarget,
+    },
+
     Context {
         #[command(subcommand)]
         action: ContextAction,
@@ -45,6 +50,12 @@ enum Cli {
         #[arg(short, long)]
         global: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum ListTarget {
+    Definitions,
+    States { definition_name: DefinitionName },
 }
 
 #[derive(Subcommand)]
@@ -75,6 +86,7 @@ fn run(cli: Cli) {
         }
         Cli::Status { instance_name: Some(instance_name) } => status_instance(instance_name),
         Cli::Status { instance_name: None } => status_all(),
+        Cli::List { target } => list(target),
         Cli::Context { action } => change_context(action),
         Cli::Next { instance_name, target } => move_instance(instance_name, Move::Next(StateName(target))),
         Cli::Jump { instance_name, target } => move_instance(instance_name, Move::JumpTo(StateName(target))),
@@ -112,12 +124,7 @@ fn status_instance(instance_name: InstanceName) {
         .find(|state| state.name == instance.state().0)
         .expect("the instance state was validated when it was loaded");
 
-    println!(
-        "instance: {}\ndefinition: {}\nstate: {}",
-        instance.name(),
-        definition.name(),
-        instance.state().0
-    );
+    println!("instance: {}", instance.name());
     if !instance.context().is_empty() {
         println!("context:");
         print!(
@@ -125,12 +132,20 @@ fn status_instance(instance_name: InstanceName) {
             toml::to_string(instance.context()).expect("context strings serialize to TOML")
         );
     }
-    print_optional("definition summary", definition.summary().as_deref());
-    print_optional("definition details", definition.details().as_deref());
-    print_steps("definition steps", definition.steps());
-    print_optional("state summary", state.summary.as_deref());
-    print_optional("state details", state.details.as_deref());
-    print_steps("state steps", &state.steps);
+    if *definition.use_global() {
+        let guidance = GlobalGuidance::bundled();
+        println!("global:");
+        print_optional("details", guidance.details().as_deref());
+        print_steps(guidance.steps());
+    }
+    println!("definition: {}", definition.name());
+    print_optional("summary", definition.summary().as_deref());
+    print_optional("details", definition.details().as_deref());
+    print_steps(definition.steps());
+    println!("state: {}", state.name);
+    print_optional("summary", state.summary.as_deref());
+    print_optional("details", state.details.as_deref());
+    print_steps(&state.steps);
 
     if !state.next.is_empty() {
         println!("next states:");
@@ -150,18 +165,22 @@ fn status_instance(instance_name: InstanceName) {
 
 fn print_optional(label: &str, value: Option<&str>) {
     if let Some(value) = value {
-        println!("{label}: {value}");
+        let mut lines = value.trim_end_matches('\n').split('\n');
+        println!("  {label}: {}", lines.next().unwrap_or_default());
+        for line in lines {
+            println!("    {line}");
+        }
     }
 }
 
-fn print_steps(label: &str, steps: &[String]) {
+fn print_steps(steps: &[String]) {
     if steps.is_empty() {
         return;
     }
 
-    println!("{label}:");
+    println!("  steps:");
     for step in steps {
-        println!("  - {step}");
+        println!("    - {step}");
     }
 }
 
@@ -180,6 +199,30 @@ fn status_all() {
             instance.definition().name(),
             instance.state().0
         );
+    }
+}
+
+fn list(target: ListTarget) {
+    match target {
+        ListTarget::Definitions => {
+            let names = Storage::current().definition_names();
+            if names.is_empty() {
+                println!("no definitions found");
+                return;
+            }
+            println!("definition | summary");
+            for name in names {
+                let definition = Definition::load_from_name(name.as_str());
+                println!("{} | {}", name, definition.summary().as_deref().unwrap_or(""));
+            }
+        }
+        ListTarget::States { definition_name } => {
+            let definition = Definition::load_from_name(definition_name.as_str());
+            println!("state | summary");
+            for state in definition.states() {
+                println!("{} | {}", state.name, state.summary.as_deref().unwrap_or(""));
+            }
+        }
     }
 }
 

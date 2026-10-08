@@ -51,6 +51,13 @@ Cli adjustents:
 - Pause (Global )
 
 
-Context feature:
-
-Map<String, String> of key value to store information that affects the whole flow
+## Todos
+- have autonomy built in
+- implement help command
+- cli adjustements
+- impl types display for prints instead of from cli
+- review commands display (human readable)
+- review globals.toml
+- review error management (proper usage of panic/raise/result)
+- trim tests
+- update template.toml to show all features

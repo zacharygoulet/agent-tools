@@ -22,7 +22,14 @@ Create a definition from the bundled three-state template, then edit
 
 ```sh
 cargo run -p flow -- new-definition-from-template workflow
+cargo run -p flow -- list definitions
+cargo run -p flow -- list states workflow
 ```
+
+`flow/global.toml` is bundled with the executable and supplies `details` and
+`steps` to every instance status. A definition can set `use_global = false`
+to hide that guidance. Definition and state `summary` fields appear in their
+listings and in instance status.
 
 Then create, move, and inspect an instance:
 

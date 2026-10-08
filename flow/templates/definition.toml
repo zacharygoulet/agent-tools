@@ -1,12 +1,16 @@
+summary = "Draft, review, and complete work."
 initial_state = "Draft"
 
 [[states]]
 name = "Draft"
+summary = "Prepare the work."
 next = ["Review"]
 
 [[states]]
 name = "Review"
+summary = "Review the work."
 next = ["Done"]
 
 [[states]]
 name = "Done"
+summary = "Complete the work."

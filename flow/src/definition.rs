@@ -26,6 +26,12 @@ pub struct Definition {
     details: Option<String>,
     #[serde(default)]
     steps: Vec<String>,
+    #[serde(default = "default_use_global")]
+    use_global: bool,
+}
+
+fn default_use_global() -> bool {
+    true
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,8 +52,15 @@ pub struct StateName(pub String);
 
 impl Definition {
     pub fn new(name: DefinitionName, initial_state: StateName, states: Vec<State>) -> Self {
-        let definition =
-            Self { name, initial_state, states, summary: None, details: None, steps: Vec::new() };
+        let definition = Self {
+            name,
+            initial_state,
+            states,
+            summary: None,
+            details: None,
+            steps: Vec::new(),
+            use_global: true,
+        };
         definition.validate_at(None);
         definition
     }
@@ -175,6 +188,7 @@ mod tests {
             summary: None,
             details: None,
             steps: Vec::new(),
+            use_global: true,
         }
     }
 
@@ -184,6 +198,15 @@ mod tests {
             toml::from_str("initial_state = \"Done\"\n\n[[states]]\nname = \"Done\"\n").unwrap();
         definition.validate();
         assert!(definition.states()[0].next.is_empty());
+        assert!(*definition.use_global());
+    }
+
+    #[test]
+    fn can_opt_out_of_global_guidance() {
+        let definition: Definition =
+            toml::from_str("use_global = false\ninitial_state = 'Done'\n[[states]]\nname = 'Done'\n")
+                .unwrap();
+        assert!(!definition.use_global());
     }
 
     #[test]

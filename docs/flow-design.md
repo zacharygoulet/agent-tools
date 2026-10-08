@@ -38,16 +38,22 @@ integrating it with Pi.
   `~/.local/state/flow/`. Lookup is local-first and falls back globally only
   if the local path is absent, even for a globally stored instance.
   Consequently a local same-named definition can shadow a global definition.
+- The bundled `flow/global.toml` supplies `details` and `steps` to every
+  instance status, unless its definition has `use_global = false`. It is
+  embedded in the executable rather than read from global instance storage;
+  malformed guidance fails status. The first draft draws from
+  `docs/common-guidelines.md`; that document remains unchanged.
 - Definition TOML contains `initial_state` and `[[states]]` entries with `name`
   and `next`. Definitions and states may also include `summary`, `details`,
   and `steps`. These are static guidance, not tracked checklists or transition
   guards. Step optionality can be expressed in the step or its details.
-  Definition-level guidance applies across states; state-level guidance is
-  specific to that state. Instance status displays definition and current-state
-  guidance, plus summaries for immediate next states. Instance TOML contains
-  `definition`, `state`, and an optional `[context]` table of string values.
-  Each file gets its name from its filename without the `.toml` extension,
-  not from a field inside the file.
+  `flow status <instance-name>` groups global, definition, and current-state
+  guidance by scope. Definition and state summaries also appear in status;
+  immediate next states show their summaries. Definition summaries apply
+  to listings, while state summaries describe states in a definition.
+  Instance TOML contains `definition`, `state`, and an optional `[context]`
+  table of string values. Each file gets its name from its filename without
+  the `.toml` extension, not from a field inside the file.
 - `flow start <definition-name> [instance-name]` creates an instance and accepts
   an optional instance name. When omitted, it generates
   `<definition-name>-<32-hex-digit-UUID>`.
@@ -56,9 +62,11 @@ integrating it with Pi.
   globally with `-g`. It does not overwrite an existing definition in the
   destination scope.
   `flow status` lists stored instances with their definition and state;
-  `flow status [instance-name]` reports the known details for one instance.
-  Local instances shadow same-named
-  global instances in the listing, matching lookup behavior.
+  `flow status [instance-name]` reports guidance and context for one instance.
+  `flow list definitions` lists definition names and summaries, and
+  `flow list states <definition-name>` lists states and their summaries in
+  definition order. Local files shadow same-named global files in listings,
+  matching lookup behavior.
   `flow next <instance-name> <state>` follows a listed transition;
   `flow jump <instance-name> <state>` moves to any defined state.
   `flow context set <instance-name> <key> <value>` adds or replaces a value;
