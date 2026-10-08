@@ -13,8 +13,9 @@ integrating it with Pi.
   Each `State` lists zero or more normal `next` destinations.
   `Next(target)` chooses one of those destinations; `JumpTo(target)` is an
   explicit exceptional move to any defined state. `Instance::apply_move`
-  changes an instance in memory; `Instance::apply_saved_move` reloads and
-  persists a named instance. Movement history is not recorded.
+  changes an instance in memory; `Instance::load_from_name(name).move_to(movement)`
+  resolves the instance path again before persisting a move. Movement history
+  is not recorded.
 - An `Instance` has one current state and owns its loaded `Definition` in
   memory. The caller proposes moves for the engine to validate and apply.
   It does not execute workflow steps, prompt the user, run commands, or
@@ -26,10 +27,9 @@ integrating it with Pi.
   loaded definition. Instance and definition fields are not publicly mutable, so
   normal API use preserves these invariants between moves. Direct Serde
   deserialization can still bypass constructor validation.
-- Persistent per-instance **context** is planned for facts callers need
-  across steps. It informs callers but does not guard moves. Its shape and
-  update interface remain undecided; expected context keys in definitions
-  are tentative.
+- Persistent per-instance **context** is a string-to-string map for facts
+  callers need across states. It informs callers but does not guard moves.
+  Instances without context load as an empty map.
 
 ## Files and lookup
 
@@ -45,8 +45,9 @@ integrating it with Pi.
   Definition-level guidance applies across states; state-level guidance is
   specific to that state. Instance status displays definition and current-state
   guidance, plus summaries for immediate next states. Instance TOML contains
-  only `definition` and `state`. Each file gets its name from its filename
-  without the `.toml` extension, not from a field inside the file.
+  `definition`, `state`, and an optional `[context]` table of string values.
+  Each file gets its name from its filename without the `.toml` extension,
+  not from a field inside the file.
 - `flow start <definition-name> [instance-name]` creates an instance and accepts
   an optional instance name. When omitted, it generates
   `<definition-name>-<32-hex-digit-UUID>`.
@@ -60,6 +61,9 @@ integrating it with Pi.
   global instances in the listing, matching lookup behavior.
   `flow next <instance-name> <state>` follows a listed transition;
   `flow jump <instance-name> <state>` moves to any defined state.
+  `flow context set <instance-name> <key> <value>` adds or replaces a value;
+  `flow context remove <instance-name> <key>` removes an existing value.
+  `flow status <instance-name>` displays nonempty context as TOML entries.
   Explicit names cannot collide with instances visible in either scope.
   Generated names are definition-prefixed random UUIDs. UUID collisions are
   negligibly likely; persistence still uses no-overwrite creation.
@@ -73,9 +77,13 @@ integrating it with Pi.
 - `Instance::save_new(InstanceSavePolicy)` resolves the destination, applies
   the global-definition requirement or copy option, then writes through a
   temporary file with no-overwrite persistence. Saved moves reload the
-  instance and atomically replace that same path after validation, without
-  recording history. Simultaneous writers are not coordinated and can lose
-  moves. The temporary file is synced, but a power loss could still lose the
+  instance and resolve its path again before atomically replacing it after
+  validation, without recording history.
+  `Instance::load_from_name(name).update_context(update)` uses the same
+  replacement mechanism for context edits. Lookup is local-first at save time,
+  so a newly appearing local instance can shadow one loaded globally.
+  Simultaneous writers are not coordinated and can lose moves or context
+  edits. The temporary file is synced, but a power loss could still lose the
   rename. Files are short-lived CLI storage, not a resident service.
   `Path::exists` treats dangling symlinks as absent for lookup/prechecks;
   creation cannot overwrite one. Replacement replaces the path entry, even
@@ -88,8 +96,7 @@ The workspace contains the `flow` crate with `start`,
 in-memory and durable movement; CLI tests; and a panic-catching `main`.
 The temporary demonstration panic was removed when the crate moved here.
 Verification includes formatting, Clippy, CLI tests, and definition-template
-and start/status smoke tests. There is no movement history,
-context storage, or Pi extension yet.
+and start/status smoke tests. There is no movement history or Pi extension yet.
 Generated instance names use definition-prefixed random UUIDs.
 The old `.agent-sm` storage paths were renamed to `.flow`; other projects'
 old local files were not migrated automatically. The later `machines` to

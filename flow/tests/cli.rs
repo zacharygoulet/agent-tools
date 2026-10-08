@@ -427,6 +427,94 @@ fn next_and_jump_persist_local_instance_state() {
 }
 
 #[test]
+fn context_updates_survive_moves_and_appear_in_status() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_movable_definition(&root.join(".flow/definitions/workflow.toml"));
+    assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
+    let path = root.join(".flow/instances/run.toml");
+    assert!(!fs::read_to_string(&path).unwrap().contains("[context]"));
+
+    for args in [
+        ["context", "set", "run", "decision", "draft"],
+        ["context", "set", "run", "review notes", "line 1\nline 2"],
+        ["context", "set", "run", "decision", "approved"],
+    ] {
+        let output = run_cli(root, &args);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let saved = fs::read_to_string(&path).unwrap();
+    let document: toml::Value = toml::from_str(&saved).unwrap();
+    assert_eq!(document["context"]["decision"].as_str(), Some("approved"));
+    assert_eq!(
+        document["context"]["review notes"].as_str(),
+        Some("line 1\nline 2")
+    );
+
+    let status = run_cli(root, &["status", "run"]);
+    assert!(status.status.success());
+    let output = String::from_utf8_lossy(&status.stdout);
+    assert!(output.contains("context:\n"), "{output}");
+    assert!(output.contains("decision = \"approved\""), "{output}");
+    assert!(output.contains("review notes"), "{output}");
+
+    assert!(run_cli(root, &["next", "run", "Review"]).status.success());
+    let moved: toml::Value = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(moved["context"], document["context"]);
+
+    assert!(
+        run_cli(root, &["context", "remove", "run", "decision"])
+            .status
+            .success()
+    );
+    let saved: toml::Value = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert!(saved["context"].get("decision").is_none());
+    assert_eq!(saved["context"]["review notes"].as_str(), Some("line 1\nline 2"));
+}
+
+#[test]
+fn removing_missing_context_does_not_change_instance() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_local_definition(root);
+    assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
+    let path = root.join(".flow/instances/run.toml");
+    let original = fs::read_to_string(&path).unwrap();
+
+    let result = run_cli(root, &["context", "remove", "run", "missing"]);
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("context key \"missing\" not found"));
+    assert_eq!(fs::read_to_string(path).unwrap(), original);
+}
+
+#[test]
+fn context_updates_global_instance_in_place() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_global_definition(root);
+    assert!(
+        run_cli(root, &["start", "workflow", "run", "-g"])
+            .status
+            .success()
+    );
+
+    let result = run_cli(root, &["context", "set", "run", "goal", "finish"]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(!root.join(".flow/instances/run.toml").exists());
+    let saved = fs::read_to_string(root.join("global/flow/instances/run.toml")).unwrap();
+    let document: toml::Value = toml::from_str(&saved).unwrap();
+    assert_eq!(document["context"]["goal"].as_str(), Some("finish"));
+}
+
+#[test]
 fn rejected_moves_leave_instance_file_unchanged() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();

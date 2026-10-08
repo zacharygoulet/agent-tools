@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -19,12 +20,18 @@ pub struct Instance {
     #[serde(deserialize_with = "load_definition", serialize_with = "save_definition_name")]
     definition: Definition,
     state: StateName,
-    // Persistent context belongs to this run; its representation is undecided.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    context: BTreeMap<String, String>,
 }
 
 pub enum Move {
     Next(StateName),
     JumpTo(StateName),
+}
+
+pub enum ContextUpdate {
+    Set { key: String, value: String },
+    Remove { key: String },
 }
 
 #[derive(Debug)]
@@ -64,7 +71,7 @@ impl Instance {
     pub fn new(name: InstanceName, definition: Definition) -> Self {
         definition.validate();
         let state = definition.initial_state().clone();
-        let instance = Self { name, definition, state };
+        let instance = Self { name, definition, state, context: BTreeMap::new() };
         instance.validate_current_state();
         instance
     }
@@ -107,6 +114,30 @@ impl Instance {
         self.state = target;
     }
 
+    pub fn move_to(mut self, movement: Move) -> Self {
+        self.apply_move(movement);
+        self.save_existing();
+        self
+    }
+
+    pub fn update_context(mut self, update: ContextUpdate) -> Self {
+        match update {
+            ContextUpdate::Set { key, value } => {
+                self.context.insert(key, value);
+            }
+            ContextUpdate::Remove { key } => {
+                if self.context.remove(&key).is_none() {
+                    raise::raise(format!(
+                        "context key {key:?} not found in instance {:?}",
+                        self.name
+                    ));
+                }
+            }
+        }
+        self.save_existing();
+        self
+    }
+
     pub fn save_new(&self, policy: InstanceSavePolicy) -> PathBuf {
         let path = Storage::current().new_instance_path(self.name.as_str(), policy.scope());
         policy.prepare_definition(&self.definition);
@@ -115,7 +146,12 @@ impl Instance {
     }
 
     pub fn load_from_name(name: &str) -> Self {
-        Self::load_with_path(name).0
+        let name = InstanceName::parse(name).raise();
+        let path = Storage::current().find_instance(name.as_str());
+        let mut instance = Self::deserialize_from_path(&path);
+        instance.name = name;
+        instance.validate_current_state();
+        instance
     }
 
     pub fn load_all() -> Vec<Self> {
@@ -126,21 +162,9 @@ impl Instance {
             .collect()
     }
 
-    pub fn apply_saved_move(name: &str, movement: Move) -> Self {
-        let (mut instance, path) = Self::load_with_path(name);
-        instance.apply_move(movement);
-        let contents = instance.serialized_contents();
-        FileWriter::from(path).replace_existing(contents.as_bytes());
-        instance
-    }
-
-    fn load_with_path(name: &str) -> (Self, PathBuf) {
-        let name = InstanceName::parse(name).raise();
-        let path = Storage::current().find_instance(name.as_str());
-        let mut instance = Self::deserialize_from_path(&path);
-        instance.name = name;
-        instance.validate_current_state();
-        (instance, path)
+    fn save_existing(&self) {
+        let path = Storage::current().find_instance(self.name.as_str());
+        FileWriter::from(path).replace_existing(self.serialized_contents().as_bytes());
     }
 
     fn save_to_path(&self, path: &Path) {

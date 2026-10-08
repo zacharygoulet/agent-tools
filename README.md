@@ -32,7 +32,12 @@ cargo run -p flow -- next run Review
 cargo run -p flow -- next run Done
 cargo run -p flow -- status
 cargo run -p flow -- status run
+cargo run -p flow -- context set run goal "Finish review"
+cargo run -p flow -- context remove run goal
 ```
+
+Context is a persistent string-to-string map in the instance's `[context]`
+TOML table. `status run` shows its entries when present.
 
 Use `jump` instead of `next` for an exceptional move to any defined state.
 Instances are stored in `.flow/instances/` (with `.toml` files) by default. Use `start -g` for

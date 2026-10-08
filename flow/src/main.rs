@@ -1,5 +1,8 @@
-use clap::Parser;
-use flow::{Definition, DefinitionName, Instance, InstanceName, InstanceSavePolicy, Move, Scope, StateName};
+use clap::{Parser, Subcommand};
+use flow::{
+    ContextUpdate, Definition, DefinitionName, Instance, InstanceName, InstanceSavePolicy, Move, Scope,
+    StateName,
+};
 use rust_utils::raise::RaiseExt;
 use uuid::Uuid;
 
@@ -32,10 +35,28 @@ enum Cli {
         instance_name: Option<InstanceName>,
     },
 
+    Context {
+        #[command(subcommand)]
+        action: ContextAction,
+    },
+
     NewDefinitionFromTemplate {
         definition_name: DefinitionName,
         #[arg(short, long)]
         global: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ContextAction {
+    Set {
+        instance_name: InstanceName,
+        key: String,
+        value: String,
+    },
+    Remove {
+        instance_name: InstanceName,
+        key: String,
     },
 }
 
@@ -54,6 +75,7 @@ fn run(cli: Cli) {
         }
         Cli::Status { instance_name: Some(instance_name) } => status_instance(instance_name),
         Cli::Status { instance_name: None } => status_all(),
+        Cli::Context { action } => change_context(action),
         Cli::Next { instance_name, target } => move_instance(instance_name, Move::Next(StateName(target))),
         Cli::Jump { instance_name, target } => move_instance(instance_name, Move::JumpTo(StateName(target))),
     }
@@ -96,6 +118,13 @@ fn status_instance(instance_name: InstanceName) {
         definition.name(),
         instance.state().0
     );
+    if !instance.context().is_empty() {
+        println!("context:");
+        print!(
+            "{}",
+            toml::to_string(instance.context()).expect("context strings serialize to TOML")
+        );
+    }
     print_optional("definition summary", definition.summary().as_deref());
     print_optional("definition details", definition.details().as_deref());
     print_steps("definition steps", definition.steps());
@@ -154,8 +183,18 @@ fn status_all() {
     }
 }
 
+fn change_context(action: ContextAction) {
+    let (name, change) = match action {
+        ContextAction::Set { instance_name, key, value } => {
+            (instance_name, ContextUpdate::Set { key, value })
+        }
+        ContextAction::Remove { instance_name, key } => (instance_name, ContextUpdate::Remove { key }),
+    };
+    Instance::load_from_name(name.as_str()).update_context(change);
+}
+
 fn move_instance(instance_name: InstanceName, movement: Move) {
-    let instance = Instance::apply_saved_move(instance_name.as_str(), movement);
+    let instance = Instance::load_from_name(instance_name.as_str()).move_to(movement);
     println!(
         "instance {} is now in state {}",
         instance.name(),
