@@ -267,17 +267,15 @@ fn status_displays_machine_state_and_next_state_metadata() {
         &machine_path,
         indoc! {r#"
             summary = "Whole workflow summary"
-            description = "Machine-wide description"
-            required_steps = ["Always do this"]
-            contextual_steps = ["Consider this when relevant"]
+            details = "Machine-wide details"
+            steps = ["Always do this", "Consider this when relevant"]
             initial_state = "Draft"
 
             [[states]]
             name = "Draft"
             summary = "Prepare the work"
-            description = "Current-state description"
-            required_steps = ["Confirm the goal"]
-            contextual_steps = ["Check for existing work"]
+            details = "Current-state details"
+            steps = ["Confirm the goal", "Check for existing work"]
             next = ["Review"]
 
             [[states]]
@@ -302,21 +300,62 @@ fn status_displays_machine_state_and_next_state_metadata() {
             machine: workflow
             state: Draft
             machine summary: Whole workflow summary
-            machine description: Machine-wide description
-            machine required steps:
+            machine details: Machine-wide details
+            machine steps:
               - Always do this
-            machine contextual steps:
               - Consider this when relevant
             state summary: Prepare the work
-            state description: Current-state description
-            state required steps:
+            state details: Current-state details
+            state steps:
               - Confirm the goal
-            state contextual steps:
               - Check for existing work
             next states:
               - Review: Review the work
         "}
     );
+}
+
+#[test]
+fn bundled_workflow_definition_loads() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let machine_path = root.join(".flow/machines/workflow.toml");
+    fs::create_dir_all(machine_path.parent().unwrap()).unwrap();
+    fs::write(&machine_path, include_str!("../../.flow/machines/workflow.toml")).unwrap();
+
+    let started = run_cli(root, &["start", "workflow", "run"]);
+    assert!(
+        started.status.success(),
+        "{}",
+        String::from_utf8_lossy(&started.stderr)
+    );
+
+    let status = run_cli(root, &["status", "run"]);
+    assert!(
+        status.status.success(),
+        "{}",
+        String::from_utf8_lossy(&status.stderr)
+    );
+    let output = String::from_utf8_lossy(&status.stdout);
+    assert!(output.contains("state: Select"), "{output}");
+    assert!(output.contains("state details:"), "{output}");
+    assert!(output.contains("state steps:"), "{output}");
+
+    for state in [
+        "Define",
+        "Design",
+        "Implement",
+        "Improve and Clean",
+        "Test",
+        "Finalize",
+    ] {
+        let moved = run_cli(root, &["next", "run", state]);
+        assert!(
+            moved.status.success(),
+            "{}",
+            String::from_utf8_lossy(&moved.stderr)
+        );
+    }
 }
 
 #[test]

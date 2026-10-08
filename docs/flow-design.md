@@ -40,9 +40,10 @@ integrating it with Pi.
   Consequently a local same-named machine can shadow a global definition.
 - Machine TOML contains `initial_state` and `[[states]]` entries with `name`
   and `next`. Machine and state definitions may also include `summary`,
-  `description`, `required_steps`, and `contextual_steps`. These are static
-  guidance, not tracked checklists or transition guards. Machine-level guidance
-  applies across states; state-level guidance is specific to that state. The
+  `details` and `steps`. These are static guidance, not tracked checklists or
+  transition guards. Step optionality can be expressed in the step or its details.
+  Machine-level guidance applies across states; state-level guidance is specific
+  to that state. The
   instance status displays machine and current-state guidance, plus summaries
   for immediate next states. Instance TOML contains only `machine` and `state`.
   Each file gets its own name from its filename without the `.toml` extension, not from a field inside the file.

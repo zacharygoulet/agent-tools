@@ -92,13 +92,11 @@ fn status_instance(instance_name: InstanceName) {
         instance.state().0
     );
     print_optional("machine summary", machine.summary().as_deref());
-    print_optional("machine description", machine.description().as_deref());
-    print_steps("machine required steps", machine.required_steps());
-    print_steps("machine contextual steps", machine.contextual_steps());
+    print_optional("machine details", machine.details().as_deref());
+    print_steps("machine steps", machine.steps());
     print_optional("state summary", state.summary.as_deref());
-    print_optional("state description", state.description.as_deref());
-    print_steps("state required steps", &state.required_steps);
-    print_steps("state contextual steps", &state.contextual_steps);
+    print_optional("state details", state.details.as_deref());
+    print_steps("state steps", &state.steps);
 
     if !state.next.is_empty() {
         println!("next states:");

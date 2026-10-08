@@ -1,142 +1,148 @@
-
-description = "Contains all steps required to be fully done with a piece of work."
-
+details = """
+A workflow for completing a piece of work from selection through follow-up.
+"""
 initial_state = "Select"
 
-# Select State
 [[states]]
 name = "Select"
 summary = "Select what to work on."
-
-description = """
-Select a candidate, selection priority order:
-1. Work provided by the user in the original request
-2. Use the projects tracker if any (check skills)
-3. Look for inboxes, todos or roadmap markdown files
-4. Ask the user if nothing was found before.
-
-To claim work, follow tracker guidelines if using one, othewise add marker if necessary
-to avoid double claiming from another agent.
+details = """
+Prefer work supplied by the user. Otherwise, look in the project's tracker, then its
+inbox, todos, or roadmap. If nothing is available, ask the user what to work on.
+Present alternatives when the choice is not obvious, and include priority, status,
+and blockers when known. For trivial work, ask whether tracking is worthwhile.
+Follow the tracker's claim rules, or use a marker when needed to avoid duplicate work.
 """
-
-required_steps = [
-    "Select a candidate (with alternatives if choice is non-obvious)"
-    "Confirm choice with the user"
-    "Claim the work",
+steps = [
+    "Identify a candidate.",
+    "Present the candidate and any useful context.",
+    "Confirm the choice with the user.",
+    "Claim the work if tracking it.",
 ]
-contextual_steps = [
-    "If the tracker supports it, present the selected item with its priority, status, and blockers when known.",
-    "If the work is trivial, ask the user if it wants to skip tracking"
-]
-
 next = ["Define"]
 
 [[states]]
 name = "Define"
 summary = "Define what the work should accomplish and why before designing a solution."
-description = """
-1. Read relevant user, tracker, and repository context.
-2. Clarify the goal, motivation, scope, constraints, dependencies, and observable acceptance criteria.
-3. For bugs, establish symptoms, reproduction, and expected behavior; investigate root cause during Design.
-4. Ask only for information that cannot be resolved from available context.
+details = """
+Clarify the goal, motivation, scope, constraints, dependencies, and observable
+acceptance criteria. For bugs, establish symptoms, reproduction, and expected behavior
+before investigating root cause during Design. Coordinate repository order and
+dependencies for multi-repository work. Ask only for information that cannot be
+resolved from available context.
 """
-required_steps = [
-    "Define observable acceptance criteria.",
-    "Clarify the motivation, scope, constraints, and dependencies.",
-]
-contextual_steps = [
-    "For bugs, establish symptoms and reproduction steps before diagnosing the cause.",
-    "For multi-repository work, coordinate repository order and dependencies.",
+steps = [
+    "Read relevant context.",
+    "Establish bug symptoms and reproduction if applicable.",
+    "Coordinate repositories if applicable.",
+    "Clarify the goal and acceptance criteria.",
+    "Ask for unresolved information if needed.",
 ]
 next = ["Design"]
 
 [[states]]
 name = "Design"
 summary = "Inspect the code and agree on an implementation approach."
-description = "Investigate existing patterns and constraints. Compare viable approaches and recommend the simplest maintainable solution. Obtain agreement before implementation."
-required_steps = [
-    "Identify the relevant code, risks, and validation strategy.",
-    "Get approval for the proposed approach before coding.",
-]
-contextual_steps = [
-    "Use a persisted plan for substantial designs.",
-    "Return to Define or Design if implementation invalidates the requirements or approach.",
+details = """
+Compare viable approaches against existing patterns, constraints, risks, and
+validation needs; recommend the simplest maintainable solution. Return to Define
+if implementation invalidates the approach or requirements.
+"""
+steps = [
+    "Inspect relevant code and constraints.",
+    "Choose an approach and validation strategy.",
+    "Consider a persisted plan if complexity warrants it.",
+    "Get approval before coding.",
 ]
 next = ["Implement", "Define"]
 
 [[states]]
 name = "Implement"
 summary = "Make the agreed changes within the defined scope."
-description = """
-Implement the approved approach using project conventions. Keep the change focused and avoid unrelated cleanup.
+details = """
+Before editing, choose whether to work in the current checkout, a feature branch,
+or a separate worktree. Consider the change's size, risk, and concurrent work.
+Follow project conventions and keep changes scoped to the agreed acceptance
+criteria. Avoid unrelated cleanup. Fix build failures before moving on.
 """
-required_steps = [
-    "Follow the project's coding style and existing patterns.",
-    "Keep changes scoped to the agreed acceptance criteria.",
+steps = [
+    "Select isolation approach",
+    "Implement the approved approach.",
+    "Ensure the build passes.",
+    "Consider incremental commits if they help review.",
+    "Explain the changes to the user"
 ]
-contextual_steps = [
-    "Use an isolated task worktree when the workflow or user requests one.",
-    "Commit incrementally when it makes related changes easier to review.",
+next = ["Improve and Clean", "Define"]
+
+[[states]]
+name = "Improve and Clean"
+summary = "Refine the implementation without changing its behavior."
+details = """
+Remove debugging remnants and dead code; improve names, structure, consistency,
+and tests where needed. Avoid unrelated refactoring. Return to Design if cleanup
+exposes a design problem. Fix build failures before moving on.
+"""
+steps = [
+    "Review the change for clarity and scope.",
+    "Refine the implementation if needed.",
+    "Ensure the build passes.",
 ]
 next = ["Test", "Design"]
 
 [[states]]
 name = "Test"
-summary = "Run the relevant checks and record their results."
-description = "Choose repeatable build, lint, and test checks that provide evidence for the change. Return to implementation or redesign if validation fails."
-required_steps = [
-    "Run relevant automated checks.",
-    "Record commands, results, and untested behavior.",
+summary = "Validate the implementation."
+details = """
+Prefer repeatable lint and test checks that provide evidence for the change.
+Return to Implement or Design if validation fails.
+"""
+steps = [
+    "Add tests if the behavior warrants them.",
+    "Run relevant lints and tests.",
+    "Consider manual checks if automated validation is insufficient.",
 ]
-contextual_steps = [
-    "Add tests for the new behavior and meaningful edge cases.",
-    "Use a manual check only when automated validation is insufficient.",
-]
-next = ["Improve and Clean", "Finalize", "Implement"]
-
-[[states]]
-name = "Improve and Clean"
-summary = "Refine the implementation without changing its behavior."
-description = "Remove debugging remnants and dead code; improve names, structure, consistency, and tests; simplify unnecessary complexity. Return to design if cleanup exposes a design problem."
-required_steps = [
-    "Review the complete change for clarity and scope.",
-    "Apply the project's coding style.",
-]
-contextual_steps = [
-    "Avoid refactoring unrelated code.",
-]
-next = ["Test", "Implement"]
+next = ["Finalize", "Implement", "Design"]
 
 [[states]]
 name = "Finalize"
 summary = "Review the complete change and agree on delivery actions."
-description = "Review the diff, repository state, and validation evidence. Present any durable finalization choices and perform only the actions the user approves."
-required_steps = [
-    "Summarize changes, validation, and residual risks.",
-    "Get approval before committing, pushing, merging, archiving, or cleaning up.",
+details = """
+Get approval before committing, pushing, merging, archiving, or cleaning up.
+Update or close tracked work only with approval and when supported by the tracker.
+"""
+steps = [
+    "Review the diff, repository state, and validation evidence.",
+    "Summarize changes and residual risks.",
+    "Agree on delivery actions with the user.",
+    "Update tracked work if approved and supported.",
 ]
-contextual_steps = [
-    "Update or close tracked work when the user approves and the tracker supports it.",
-]
-next = ["Future Work", "Test"]
+next = ["Future Work"]
 
 [[states]]
 name = "Future Work"
 summary = "Preserve deferred or newly discovered follow-up work."
-description = "Review out-of-scope and deferred items. Record approved follow-ups in the chosen tracker, preferring the local worklog when available."
-required_steps = [
-    "Identify meaningful deferred work and where it should be tracked.",
+details = """
+Use the chosen tracker for approved follow-ups, preferring the local worklog
+when available.
+"""
+steps = [
+    "Identify meaningful deferred or discovered work.",
     "Ask whether the user has anything else to preserve.",
+    "Record approved follow-ups if any.",
 ]
-contextual_steps = []
 next = ["Self Improve"]
 
 [[states]]
 name = "Self Improve"
 summary = "Consider whether this work revealed a concrete workflow improvement."
-description = "Look for recurring friction supported by evidence. Suggest a focused change to the workflow, related skills, or managed configuration only when warranted. Apply shared changes only with user approval."
-required_steps = [
-    "Do not invent improvements without concrete evidence.",
-    "Ask whether there is anything to improve before completing the workflow.",
+details = """
+Do not invent improvements without evidence. When warranted, suggest a focused
+change to devlopment tooling, related skills, or managed configuration. Apply shared
+changes only with user approval.
+"""
+steps = [
+    "Look for evidence of recurring friction.",
+    "Suggest an improvement if warranted.",
+    "Ask whether there is anything else to improve.",
+    "Apply or log approved shared changes if any.",
 ]
-contextual_steps = []

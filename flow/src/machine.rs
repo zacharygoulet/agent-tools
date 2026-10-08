@@ -23,11 +23,9 @@ pub struct Machine {
     #[serde(default)]
     summary: Option<String>,
     #[serde(default)]
-    description: Option<String>,
+    details: Option<String>,
     #[serde(default)]
-    required_steps: Vec<String>,
-    #[serde(default)]
-    contextual_steps: Vec<String>,
+    steps: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -38,11 +36,9 @@ pub struct State {
     #[serde(default)]
     pub summary: Option<String>,
     #[serde(default)]
-    pub description: Option<String>,
+    pub details: Option<String>,
     #[serde(default)]
-    pub required_steps: Vec<String>,
-    #[serde(default)]
-    pub contextual_steps: Vec<String>,
+    pub steps: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -50,15 +46,7 @@ pub struct StateName(pub String);
 
 impl Machine {
     pub fn new(name: MachineName, initial_state: StateName, states: Vec<State>) -> Self {
-        let machine = Self {
-            name,
-            initial_state,
-            states,
-            summary: None,
-            description: None,
-            required_steps: Vec::new(),
-            contextual_steps: Vec::new(),
-        };
+        let machine = Self { name, initial_state, states, summary: None, details: None, steps: Vec::new() };
         machine.validate_at(None);
         machine
     }
@@ -175,14 +163,7 @@ mod tests {
     }
 
     fn state(name: &str, next: Vec<StateName>) -> State {
-        State {
-            name: name.to_owned(),
-            next,
-            summary: None,
-            description: None,
-            required_steps: Vec::new(),
-            contextual_steps: Vec::new(),
-        }
+        State { name: name.to_owned(), next, summary: None, details: None, steps: Vec::new() }
     }
 
     fn machine(initial_state: &str, states: Vec<State>) -> Machine {
@@ -191,9 +172,8 @@ mod tests {
             initial_state: StateName(initial_state.to_owned()),
             states,
             summary: None,
-            description: None,
-            required_steps: Vec::new(),
-            contextual_steps: Vec::new(),
+            details: None,
+            steps: Vec::new(),
         }
     }
 

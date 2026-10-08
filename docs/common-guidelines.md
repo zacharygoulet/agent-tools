@@ -13,15 +13,15 @@ You usually change state using the `next` command, or you can jump to any state 
 the `jump` command. Required steps should always be done, contextual steps can depend
 on the context and the AI's judgement.
 
-## Every status
+## Init steps
+- establish autonomy
 
-Required steps:
+## Global steps
+
 - Drive the flow proactively toward completion. Either progress, or give your best
 guess of what's next, and provide the user with questions or simple confirmation.
 - Document what you are doing in converstation. Write down your intents (before most actions), findings,
 decisions and outcomes
-
-Contextual steps:
 - Load related skills
 - Consider context compaction (historic context is mostly irrelevant, or bloated for upcomming work)
 - Consider using a subagent (possible reasons: prevent context bloat, use specialized model, parallel work)
