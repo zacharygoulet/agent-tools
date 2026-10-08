@@ -13,15 +13,20 @@ You usually change state using the `next` command, or you can jump to any state 
 the `jump` command. Required steps should always be done, contextual steps can depend
 on the context and the AI's judgement.
 
+todo explain context
+
 todo explain steps (global, flow, and state steps)
+
+
+## Start / Resume steps
+- establish autonomy
+
+## Global details
 
 todo explain autonomy options (autonomous, steered, guided), where:
 - autonomous means the agent should run fully solo, user input should have been gathered
 before starting, or the agent should use its best guess, stopping only on fundamental
 issues
-
-## Start / Resume steps
-- establish autonomy
 
 ## Global steps
 
