@@ -1,6 +1,6 @@
 # Common Guidelines
 
-## Initial
+## Help
 Tool that helps AI agents follow configured deterministic flows. It does not do any
 work itself, it just helps agents keep track of where they are in a complex multi-step
 flow while driving the work ahead themselves.
@@ -13,7 +13,14 @@ You usually change state using the `next` command, or you can jump to any state 
 the `jump` command. Required steps should always be done, contextual steps can depend
 on the context and the AI's judgement.
 
-## Init steps
+todo explain steps (global, flow, and state steps)
+
+todo explain autonomy options (autonomous, steered, guided), where:
+- autonomous means the agent should run fully solo, user input should have been gathered
+before starting, or the agent should use its best guess, stopping only on fundamental
+issues
+
+## Start / Resume steps
 - establish autonomy
 
 ## Global steps
@@ -25,3 +32,20 @@ decisions and outcomes
 - Load related skills
 - Consider context compaction (historic context is mostly irrelevant, or bloated for upcomming work)
 - Consider using a subagent (possible reasons: prevent context bloat, use specialized model, parallel work)
+
+
+
+Cli adjustents:
+
+- Same first command to explain the tool
+  - Explains the tool
+  - Show status (available definitions and instances)
+- Start (new instance)
+- Resume (resume instance, similar to current start with a name)
+- Move (Next or Jump)
+- Pause (Global )
+
+
+Context feature:
+
+Map<String, String> of key value to store information that affects the whole flow

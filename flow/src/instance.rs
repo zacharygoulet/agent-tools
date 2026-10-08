@@ -14,7 +14,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Debug, Deserialize, Serialize, getset::Getters)]
 #[getset(get = "pub")]
 pub struct Instance {
-    // why do we need this? skip + default
     #[serde(skip, default = "InstanceName::placeholder")]
     name: InstanceName,
     #[serde(deserialize_with = "load_definition", serialize_with = "save_definition_name")]

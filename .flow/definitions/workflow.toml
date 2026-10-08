@@ -64,6 +64,9 @@ Before editing, choose whether to work in the current checkout, a feature branch
 or a separate worktree. Consider the change's size, risk, and concurrent work.
 Follow project conventions and keep changes scoped to the agreed acceptance
 criteria. Avoid unrelated cleanup. Fix build failures before moving on.
+
+If the work contains multiple independant changes, you can do multiple
+implement -> improve -> test passes to make the changes in small steps.
 """
 steps = [
     "Select isolation approach",
@@ -95,6 +98,8 @@ summary = "Validate the implementation."
 details = """
 Prefer repeatable lint and test checks that provide evidence for the change.
 Return to Implement or Design if validation fails.
+Return to Implement if full implementation was broken in multiple small
+chunks.
 """
 steps = [
     "Add tests if the behavior warrants them.",
