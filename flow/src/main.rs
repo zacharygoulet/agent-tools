@@ -7,11 +7,16 @@ use rust_utils::raise::RaiseExt;
 use uuid::Uuid;
 
 const DEFINITION_TEMPLATE: &str = include_str!("../templates/definition.toml");
+const HELP_OVERVIEW: &str = include_str!("../help.txt");
 
 #[derive(Parser)]
+#[command(about = HELP_OVERVIEW)]
 enum Cli {
+    /// Start a new instance from a definition.
     Start {
+        /// Definition to start from.
         definition_name: DefinitionName,
+        /// Optional instance name; generated if omitted.
         instance_name: Option<InstanceName>,
         /// Save globally, requiring an existing global definition.
         #[arg(short, long)]
@@ -21,36 +26,49 @@ enum Cli {
         copy_definition: bool,
     },
 
+    /// Move to a listed next state.
     Next {
+        /// Instance to move.
         instance_name: InstanceName,
+        /// Listed next state.
         target: String,
     },
 
+    /// Jump to any defined state, including exceptional moves.
     Jump {
+        /// Instance to move.
         instance_name: InstanceName,
+        /// Destination state.
         target: String,
     },
 
+    /// Show an instance's guidance or list all instances.
     Status {
+        /// Instance to inspect; omit to list all instances.
         instance_name: Option<InstanceName>,
     },
 
+    /// List definitions or states in a definition.
     List {
         #[command(subcommand)]
         target: ListTarget,
     },
 
+    /// Set or remove persistent instance context.
     Context {
         #[command(subcommand)]
         action: ContextAction,
     },
 
+    /// Set autonomy for a state or a range along next paths.
     Autonomy {
         #[command(subcommand)]
         action: AutonomyAction,
     },
 
+    /// Create a definition from the bundled template.
     NewDefinitionFromTemplate {
+        /// Name for the new definition.
         definition_name: DefinitionName,
         #[arg(short, long)]
         global: bool,
@@ -59,17 +77,21 @@ enum Cli {
 
 #[derive(Subcommand)]
 enum ListTarget {
+    /// List available definitions.
     Definitions,
+    /// List states in definition order.
     States { definition_name: DefinitionName },
 }
 
 #[derive(Subcommand)]
 enum ContextAction {
+    /// Store or replace a context value.
     Set {
         instance_name: InstanceName,
         key: String,
         value: String,
     },
+    /// Remove a context value.
     Remove {
         instance_name: InstanceName,
         key: String,
@@ -78,10 +100,15 @@ enum ContextAction {
 
 #[derive(Subcommand)]
 enum AutonomyAction {
+    /// Set a state's level or every state on next paths through an end state.
     Set {
+        /// Instance to configure.
         instance_name: InstanceName,
+        /// guided, steered, or autonomous.
         level: Autonomy,
+        /// First state to configure.
         state: String,
+        /// Inclusive end state; omit to change only the first state.
         end_state: Option<String>,
     },
 }

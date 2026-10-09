@@ -1,6 +1,9 @@
 # Common Guidelines
 
 ## Help
+Run `flow help` first for the tool overview and Clap-generated command list.
+Run `flow help <command>` for command arguments and options.
+
 Tool that helps AI agents follow configured deterministic flows. It does not do any
 work itself, it just helps agents keep track of where they are in a complex multi-step
 flow while driving the work ahead themselves.
@@ -64,21 +67,6 @@ decisions and outcomes
 - Consider using a subagent (possible reasons: prevent context bloat, use specialized model, parallel work)
 
 
-
-Cli adjustents:
-
-- Same first command to explain the tool
-  - Explains the tool
-  - Show status (available definitions and instances)
-- Start (new instance)
-- Resume (resume instance, similar to current start with a name)
-- Move (Next or Jump)
-- Pause (Global )
-
-
-## Todos
-- implement help command
-- cli adjustements
 - impl types display for prints instead of from cli
 - review commands display (human readable)
 - review globals.toml

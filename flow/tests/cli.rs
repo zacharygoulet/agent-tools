@@ -79,6 +79,56 @@ fn write_movable_definition(path: &Path) {
 }
 
 #[test]
+fn help_explains_flow_then_lists_clap_commands() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let help = run_cli(root, &["help"]);
+    assert!(help.status.success(), "{}", String::from_utf8_lossy(&help.stderr));
+    let text = String::from_utf8_lossy(&help.stdout);
+    assert!(
+        text.starts_with("Flow helps AI agents follow configured, deterministic flows."),
+        "{text}"
+    );
+    assert!(
+        text.find("Autonomous autonomy works independently").unwrap() < text.find("Usage: flow").unwrap()
+    );
+    for command in [
+        "start",
+        "next",
+        "jump",
+        "status",
+        "list",
+        "context",
+        "autonomy",
+        "new-definition-from-template",
+    ] {
+        assert!(text.contains(command), "{text}");
+    }
+    assert!(text.contains("Use 'flow help <command>'"), "{text}");
+
+    let flag = run_cli(root, &["--help"]);
+    assert!(flag.status.success());
+    assert_eq!(help.stdout, flag.stdout);
+}
+
+#[test]
+fn help_for_command_shows_clap_generated_arguments() {
+    let directory = tempfile::tempdir().unwrap();
+    let help = run_cli(directory.path(), &["help", "autonomy", "set"]);
+    assert!(help.status.success(), "{}", String::from_utf8_lossy(&help.stderr));
+    let text = String::from_utf8_lossy(&help.stdout);
+    assert!(
+        text.contains("Usage: flow autonomy set <INSTANCE_NAME> <LEVEL> <STATE> [END_STATE]"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Inclusive end state; omit to change only the first state"),
+        "{text}"
+    );
+    assert!(text.contains("guided, steered, or autonomous"), "{text}");
+}
+
+#[test]
 fn loads_instance_with_separate_definition_file() {
     let output = load_with_definition(Some(indoc! {r#"
             initial_state = "Design"

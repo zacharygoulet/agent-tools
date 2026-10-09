@@ -12,7 +12,8 @@ Build and test from the workspace root:
 ```sh
 cargo build -p flow
 cargo test -p flow
-cargo run -p flow -- --help
+cargo run -p flow -- help
+cargo run -p flow -- help autonomy set
 ```
 
 Definitions live in `.flow/definitions/` or
