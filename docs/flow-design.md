@@ -27,9 +27,11 @@ integrating it with Pi.
   loaded definition. Instance and definition fields are not publicly mutable, so
   normal API use preserves these invariants between moves. Direct Serde
   deserialization can still bypass constructor validation.
-- Persistent per-instance **context** is a string-to-string map for facts
-  callers need across states. It informs callers but does not guard moves.
-  Instances without context load as an empty map.
+- Persistent per-instance **context** is a string-to-string map for compact
+  reminders and pointers callers need across states (for example, an issue ID
+  or plan URL). It is not a place for detailed plans, requirements, or notes.
+  The CLI limits values to 150 characters. Context informs callers but does not
+  guard moves. Instances without context load as an empty map.
 
 ## Files and lookup
 
@@ -69,7 +71,8 @@ integrating it with Pi.
   matching lookup behavior.
   `flow next <instance-name> <state>` follows a listed transition;
   `flow jump <instance-name> <state>` moves to any defined state.
-  `flow context set <instance-name> <key> <value>` adds or replaces a value;
+  `flow context set <instance-name> <key> <value>` adds or replaces a value
+  of at most 150 characters; values should be compact reminders or pointers.
   `flow context remove <instance-name> <key>` removes an existing value.
   `flow status <instance-name>` displays nonempty context as TOML entries.
   Explicit names cannot collide with instances visible in either scope.

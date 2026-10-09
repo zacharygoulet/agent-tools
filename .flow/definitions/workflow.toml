@@ -1,9 +1,17 @@
 
 
 summary = "Work delivery lifecycle."
+
 details = """
 A workflow for completing a piece of work from selection through follow-up.
+Context saves are optional. For example, a suggestion to save a plan link should
+not influence whether a plan is created.
 """
+
+steps = [
+    "Consider saving note in context for Future Work or Self Improve",
+]
+
 initial_state = "Select"
 
 [[states]]
@@ -21,6 +29,7 @@ steps = [
     "Present the candidate and any useful context.",
     "Confirm the choice with the user.",
     "Claim the work if tracking it.",
+    "Optionally save a compact tracker ID or URL in context if later states will need it.",
 ]
 next = ["Define"]
 
@@ -40,6 +49,7 @@ steps = [
     "Coordinate repositories if applicable.",
     "Clarify the goal and acceptance criteria.",
     "Ask for unresolved information if needed.",
+    "Confirm autonomy startegy for the flow."
 ]
 next = ["Design"]
 
@@ -55,6 +65,7 @@ steps = [
     "Inspect relevant code and constraints.",
     "Choose an approach and validation strategy.",
     "Consider a persisted plan if complexity warrants it.",
+    "If a plan is created, optionally save its link in context for later states.",
     "Get approval before coding.",
 ]
 next = ["Implement"]
@@ -108,6 +119,7 @@ steps = [
     "Add tests if the behavior warrants them.",
     "Run relevant lints and tests.",
     "Consider manual checks if automated validation is insufficient.",
+    "Optionally save a pointer to recorded validation evidence if Finalize will need it.",
 ]
 next = ["Finalize"]
 

@@ -10,6 +10,8 @@ use uuid::Uuid;
 
 const DEFINITION_TEMPLATE: &str = include_str!("../templates/definition.toml");
 const HELP_OVERVIEW: &str = include_str!("../help.txt");
+const MAX_CONTEXT_VALUE_CHARS: usize = 150;
+const CONTEXT_VALUE_LIMIT_MESSAGE: &str = "context values must be at most 150 characters; context is for compact reminders and pointers, not detailed plans or notes";
 
 #[derive(Parser)]
 #[command(about = HELP_OVERVIEW)]
@@ -190,6 +192,9 @@ fn list(target: ListTarget) {
 fn change_context(action: ContextAction) {
     let (name, change) = match action {
         ContextAction::Set { instance_name, key, value } => {
+            if value.chars().count() > MAX_CONTEXT_VALUE_CHARS {
+                rust_utils::raise::raise(CONTEXT_VALUE_LIMIT_MESSAGE.to_owned());
+            }
             (instance_name, ContextUpdate::Set { key, value })
         }
         ContextAction::Remove { instance_name, key } => (instance_name, ContextUpdate::Remove { key }),

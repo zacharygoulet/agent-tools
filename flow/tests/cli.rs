@@ -620,6 +620,29 @@ fn context_updates_survive_moves_and_appear_in_status() {
 }
 
 #[test]
+fn context_values_are_limited_to_150_characters() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_movable_definition(&root.join(".flow/definitions/workflow.toml"));
+    assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
+
+    let exact_limit = "a".repeat(150);
+    let accepted = run_cli(root, &["context", "set", "run", "plan", &exact_limit]);
+    assert!(accepted.status.success());
+
+    let too_long = "a".repeat(151);
+    let rejected = run_cli(root, &["context", "set", "run", "plan", &too_long]);
+    assert!(!rejected.status.success());
+    let error = String::from_utf8_lossy(&rejected.stderr);
+    assert!(error.contains("at most 150 characters"), "{error}");
+    assert!(error.contains("compact reminders and pointers"), "{error}");
+
+    let saved: toml::Value =
+        toml::from_str(&fs::read_to_string(root.join(".flow/instances/run.toml")).unwrap()).unwrap();
+    assert_eq!(saved["context"]["plan"].as_str(), Some(exact_limit.as_str()));
+}
+
+#[test]
 fn autonomy_range_is_persisted_per_state_and_follows_moves() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();

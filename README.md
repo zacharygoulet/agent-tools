@@ -45,7 +45,9 @@ cargo run -p flow -- context remove run goal
 ```
 
 Context is a persistent string-to-string map in the instance's `[context]`
-TOML table. `status run` shows its entries when present.
+TOML table. `status run` shows its entries when present. Keep values compact:
+short reminders and pointers (such as an issue ID or plan URL), not detailed
+plans, requirements, or notes. The CLI limits each value to 150 characters.
 
 Use `jump` instead of `next` for an exceptional move to any defined state.
 Instances are stored in `.flow/instances/` (with `.toml` files) by default. Use `start -g` for

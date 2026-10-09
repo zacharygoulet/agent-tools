@@ -2,7 +2,13 @@ Flow helps AI agents follow configured, deterministic flows. It tracks progress;
 
 A definition describes states, their guidance, and normal next transitions. Start an
 instance from a definition, use status to read its current guidance, move with next,
-or use jump for exceptional moves. Context stores facts across states.
+or use jump for exceptional moves.
+
+Instances can be assigned autonomy level per state, and per instance context.
+
+Context is a persistent set of compact reminders or pointers for later states, such as
+an issue ID or plan URL. Values are limited to 150 characters; keep detailed plans,
+requirements, and notes in their proper documents instead.
 
 Each state starts with guided autonomy: pause for approval at state boundaries and
 significant decisions. Steered autonomy proceeds by default, asking on consequential

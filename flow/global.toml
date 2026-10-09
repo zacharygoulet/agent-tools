@@ -1,13 +1,11 @@
 details = """
-Flow tracks progress through a definition but does not perform the work itself.
-Use the current state's guidance to drive the work. Agree on how autonomously to
-proceed with the user when it is unclear; ask for input when required rather
-than assuming unlimited authority.
+Use the current state's guidance to drive the work.
 """
 steps = [
     "Drive the flow proactively toward completion or a clear user decision.",
     "Communicate intentions, findings, decisions, and outcomes as work progresses.",
-    "Load relevant skills when needed.",
-    "Consider compacting context when past conversation is no longer useful.",
-    "Consider a subagent when it helps with bounded or parallel work.",
+    "Consider loading relevant skills.",
+    "Consider saving context notes if info is relevent to upcomming states."
+    "Consider compacting context if context is bloated or irrelevant for following work.",
+    "Consider a subagent (possible reasons: prevent context bloat, use specialized model, parallel work).",
 ]
