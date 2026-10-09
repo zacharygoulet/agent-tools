@@ -317,7 +317,7 @@ fn status_lists_local_and_global_instances_in_name_order() {
     );
     assert_eq!(
         String::from_utf8_lossy(&status.stdout),
-        "instance | definition | state\nglobal-run | workflow | Design\nlocal-run | workflow | Design\n"
+        "INSTANCE    DEFINITION  STATE\n----------  ----------  -----\nglobal-run  workflow    Design\nlocal-run   workflow    Design\n"
     );
 }
 
@@ -353,7 +353,7 @@ fn lists_definitions_with_summaries_and_local_shadowing() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "definition | summary\nother | \nworkflow | Local workflow\n"
+        "DEFINITION  SUMMARY\n----------  -------\nother\nworkflow    Local workflow\n"
     );
 }
 
@@ -373,7 +373,7 @@ fn lists_states_with_summaries_in_definition_order() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "state | summary\nDraft | Start here\nReview | \n"
+        "STATE   SUMMARY\n------  -------\nDraft   Start here\nReview\n"
     );
 }
 

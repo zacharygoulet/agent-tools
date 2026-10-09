@@ -244,10 +244,30 @@ fn status_all() {
         return;
     }
 
-    println!("instance | definition | state");
+    let instance_width = instances
+        .iter()
+        .map(|instance| instance.name().as_str().len())
+        .max()
+        .unwrap_or(0)
+        .max("INSTANCE".len());
+    let definition_width = instances
+        .iter()
+        .map(|instance| instance.definition().name().as_str().len())
+        .max()
+        .unwrap_or(0)
+        .max("DEFINITION".len());
+    println!(
+        "{:<instance_width$}  {:<definition_width$}  STATE",
+        "INSTANCE", "DEFINITION"
+    );
+    println!(
+        "{}  {}  -----",
+        "-".repeat(instance_width),
+        "-".repeat(definition_width)
+    );
     for instance in instances {
         println!(
-            "{} | {} | {}",
+            "{:<instance_width$}  {:<definition_width$}  {}",
             instance.name(),
             instance.definition().name(),
             instance.state().0
@@ -263,18 +283,41 @@ fn list(target: ListTarget) {
                 println!("no definitions found");
                 return;
             }
-            println!("definition | summary");
-            for name in names {
-                let definition = Definition::load_from_name(name.as_str());
-                println!("{} | {}", name, definition.summary().as_deref().unwrap_or(""));
-            }
+            let rows = names
+                .into_iter()
+                .map(|name| {
+                    let definition = Definition::load_from_name(name.as_str());
+                    (name.to_string(), definition.summary().clone().unwrap_or_default())
+                })
+                .collect();
+            print_list_table("DEFINITION", rows);
         }
         ListTarget::States { definition_name } => {
             let definition = Definition::load_from_name(definition_name.as_str());
-            println!("state | summary");
-            for state in definition.states() {
-                println!("{} | {}", state.name, state.summary.as_deref().unwrap_or(""));
-            }
+            let rows = definition
+                .states()
+                .iter()
+                .map(|state| (state.name.clone(), state.summary.clone().unwrap_or_default()))
+                .collect();
+            print_list_table("STATE", rows);
+        }
+    }
+}
+
+fn print_list_table(header: &str, rows: Vec<(String, String)>) {
+    let width = rows
+        .iter()
+        .map(|(name, _)| name.chars().count())
+        .max()
+        .unwrap_or(0)
+        .max(header.len());
+    println!("{header:<width$}  SUMMARY");
+    println!("{}  -------", "-".repeat(width));
+    for (name, summary) in rows {
+        if summary.is_empty() {
+            println!("{name}");
+        } else {
+            println!("{name:<width$}  {summary}");
         }
     }
 }
