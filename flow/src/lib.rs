@@ -7,6 +7,6 @@ mod storage;
 
 pub use definition::{Definition, State, StateName};
 pub use global::GlobalGuidance;
-pub use instance::{ContextUpdate, Instance, InstanceSavePolicy, Move};
+pub use instance::{Autonomy, ContextUpdate, Instance, InstanceSavePolicy, Move};
 pub use name::{DefinitionName, InstanceName};
 pub use storage::{Scope, Storage};

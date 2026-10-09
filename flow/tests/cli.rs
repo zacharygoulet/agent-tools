@@ -98,7 +98,7 @@ fn loads_instance_with_separate_definition_file() {
         "{status}"
     );
     assert!(
-        status.contains("definition: workflow\nstate: Design\n"),
+        status.contains("definition: workflow\nstate: Design\n  autonomy: guided\n"),
         "{status}"
     );
 }
@@ -227,6 +227,9 @@ fn new_creates_local_instance_that_can_be_loaded() {
         indoc! {r#"
             definition = "workflow"
             state = "Design"
+
+            [autonomy]
+            Design = "guided"
         "#}
     );
 
@@ -340,7 +343,7 @@ fn status_for_one_instance_reports_its_current_details() {
     let output = String::from_utf8_lossy(&status.stdout);
     assert!(output.contains("global:\n  details:"), "{output}");
     assert!(
-        output.contains("definition: workflow\nstate: Design\n"),
+        output.contains("definition: workflow\nstate: Design\n  autonomy: guided\n"),
         "{output}"
     );
 }
@@ -394,6 +397,8 @@ fn status_displays_definition_state_and_next_state_metadata() {
                 - Always do this
                 - Consider this when relevant
             state: Draft
+              autonomy: guided
+                Pause for user approval at state boundaries and significant decisions.
               summary: Prepare the work
               details: Current-state details
               steps:
@@ -432,7 +437,7 @@ fn bundled_workflow_definition_loads() {
     );
     let output = String::from_utf8_lossy(&status.stdout);
     assert!(output.contains("state: Select"), "{output}");
-    assert!(output.contains("state: Select\n  summary:"), "{output}");
+    assert!(output.contains("state: Select\n  autonomy: guided\n    Pause for user approval at state boundaries and significant decisions.\n  summary:"), "{output}");
     assert!(output.contains("  details:"), "{output}");
     assert!(output.contains("  steps:"), "{output}");
 
@@ -456,6 +461,21 @@ fn bundled_workflow_definition_loads() {
         assert!(output.contains("global:\n  details:"), "{output}");
         assert!(output.contains(&format!("state: {state}\n")), "{output}");
     }
+}
+
+#[test]
+fn bundled_workflow_uses_jump_for_rework() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let path = root.join(".flow/definitions/workflow.toml");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, include_str!("../../.flow/definitions/workflow.toml")).unwrap();
+    assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
+    assert!(run_cli(root, &["jump", "run", "Test"]).status.success());
+    let next = run_cli(root, &["next", "run", "Implement"]);
+    assert!(!next.status.success());
+    assert!(String::from_utf8_lossy(&next.stderr).contains("cannot move next"));
+    assert!(run_cli(root, &["jump", "run", "Implement"]).status.success());
 }
 
 #[test]
@@ -490,6 +510,11 @@ fn next_and_jump_persist_local_instance_state() {
         indoc! {r#"
             definition = "workflow"
             state = "Done"
+
+            [autonomy]
+            Design = "guided"
+            Done = "guided"
+            Review = "guided"
         "#}
     );
 }
@@ -542,6 +567,218 @@ fn context_updates_survive_moves_and_appear_in_status() {
     let saved: toml::Value = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
     assert!(saved["context"].get("decision").is_none());
     assert_eq!(saved["context"]["review notes"].as_str(), Some("line 1\nline 2"));
+}
+
+#[test]
+fn autonomy_range_is_persisted_per_state_and_follows_moves() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_movable_definition(&root.join(".flow/definitions/workflow.toml"));
+    assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
+
+    let range = run_cli(root, &["autonomy", "set", "run", "steered", "Design", "Review"]);
+    assert!(
+        range.status.success(),
+        "{}",
+        String::from_utf8_lossy(&range.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&range.stdout),
+        "set autonomy to steered for states:\n  - Design\n  - Review\n"
+    );
+    let single = run_cli(root, &["autonomy", "set", "run", "autonomous", "Review"]);
+    assert!(
+        single.status.success(),
+        "{}",
+        String::from_utf8_lossy(&single.stderr)
+    );
+
+    assert_eq!(
+        String::from_utf8_lossy(&single.stdout),
+        "set autonomy to autonomous for states:\n  - Review\n"
+    );
+    let path = root.join(".flow/instances/run.toml");
+    let saved: toml::Value = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(saved["autonomy"]["Design"].as_str(), Some("steered"));
+    assert_eq!(saved["autonomy"]["Review"].as_str(), Some("autonomous"));
+    assert_eq!(saved["autonomy"]["Done"].as_str(), Some("guided"));
+
+    let status = run_cli(root, &["status", "run"]);
+    assert!(String::from_utf8_lossy(&status.stdout).contains("state: Design\n  autonomy: steered\n"));
+    assert!(run_cli(root, &["next", "run", "Review"]).status.success());
+    let status = run_cli(root, &["status", "run"]);
+    let output = String::from_utf8_lossy(&status.stdout);
+    assert!(
+        output.contains("state: Review\n  autonomy: autonomous\n"),
+        "{output}"
+    );
+    assert!(
+        output.contains("Continue independently; stop only for fundamental blockers."),
+        "{output}"
+    );
+    assert!(run_cli(root, &["jump", "run", "Done"]).status.success());
+    assert!(
+        String::from_utf8_lossy(&run_cli(root, &["status", "run"]).stdout)
+            .contains("state: Done\n  autonomy: guided\n")
+    );
+}
+
+#[test]
+fn autonomy_range_includes_all_routes_and_loops_before_end_but_stops_at_end() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let path = root.join(".flow/definitions/workflow.toml");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(
+        &path,
+        indoc! {r#"
+        initial_state = "Start"
+        [[states]]
+        name = "End"
+        next = ["After"]
+        [[states]]
+        name = "Right"
+        next = ["End"]
+        [[states]]
+        name = "Start"
+        next = ["Left", "Right", "Dead End"]
+        [[states]]
+        name = "Dead End"
+        next = ["Dead End"]
+        [[states]]
+        name = "Loop"
+        next = ["Left"]
+        [[states]]
+        name = "After"
+        next = ["End"]
+        [[states]]
+        name = "Left"
+        next = ["Loop", "End"]
+        [[states]]
+        name = "Unrelated"
+    "#},
+    )
+    .unwrap();
+    assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
+
+    let range = run_cli(root, &["autonomy", "set", "run", "steered", "Start", "End"]);
+    assert!(
+        range.status.success(),
+        "{}",
+        String::from_utf8_lossy(&range.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&range.stdout),
+        "set autonomy to steered for states:\n  - End\n  - Right\n  - Start\n  - Loop\n  - Left\n"
+    );
+    let saved: toml::Value =
+        toml::from_str(&fs::read_to_string(root.join(".flow/instances/run.toml")).unwrap()).unwrap();
+    for name in ["End", "Right", "Start", "Loop", "Left"] {
+        assert_eq!(saved["autonomy"][name].as_str(), Some("steered"), "{name}");
+    }
+    for name in ["Dead End", "After", "Unrelated"] {
+        assert_eq!(saved["autonomy"][name].as_str(), Some("guided"), "{name}");
+    }
+
+    let same = run_cli(root, &["autonomy", "set", "run", "autonomous", "End", "End"]);
+    assert_eq!(
+        String::from_utf8_lossy(&same.stdout),
+        "set autonomy to autonomous for states:\n  - End\n"
+    );
+    let original = fs::read_to_string(root.join(".flow/instances/run.toml")).unwrap();
+    let unreachable = run_cli(root, &["autonomy", "set", "run", "steered", "Start", "Unrelated"]);
+    assert!(!unreachable.status.success());
+    assert!(String::from_utf8_lossy(&unreachable.stderr).contains("no next path"));
+    assert_eq!(
+        fs::read_to_string(root.join(".flow/instances/run.toml")).unwrap(),
+        original
+    );
+}
+
+#[test]
+fn autonomy_rejects_invalid_ranges_without_changing_instance() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_movable_definition(&root.join(".flow/definitions/workflow.toml"));
+    assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
+    let path = root.join(".flow/instances/run.toml");
+    let original = fs::read_to_string(&path).unwrap();
+
+    for (args, message) in [
+        (
+            vec!["autonomy", "set", "run", "steered", "Done", "Design"],
+            "no next path",
+        ),
+        (
+            vec!["autonomy", "set", "run", "steered", "Missing"],
+            "unknown state",
+        ),
+        (
+            vec!["autonomy", "set", "run", "steered", "Design", "Missing"],
+            "unknown state",
+        ),
+        (
+            vec!["autonomy", "set", "run", "unsupervised", "Design"],
+            "Matching variant not found",
+        ),
+    ] {
+        let output = run_cli(root, &args);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains(message));
+        assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    }
+}
+
+#[test]
+fn autonomy_updates_global_instance_and_handles_state_names_with_spaces() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let definition = root.join("global/flow/definitions/workflow.toml");
+    fs::create_dir_all(definition.parent().unwrap()).unwrap();
+    fs::write(
+        &definition,
+        "initial_state = 'In Progress'\n[[states]]\nname = 'In Progress'\n[[states]]\nname = 'Done'\n",
+    )
+    .unwrap();
+    assert!(
+        run_cli(root, &["start", "workflow", "run", "-g"])
+            .status
+            .success()
+    );
+
+    let set = run_cli(root, &["autonomy", "set", "run", "steered", "In Progress"]);
+    assert!(set.status.success(), "{}", String::from_utf8_lossy(&set.stderr));
+    assert!(!root.join(".flow/instances/run.toml").exists());
+    let saved = fs::read_to_string(root.join("global/flow/instances/run.toml")).unwrap();
+    let document: toml::Value = toml::from_str(&saved).unwrap();
+    assert_eq!(document["autonomy"]["In Progress"].as_str(), Some("steered"));
+    assert!(
+        String::from_utf8_lossy(&run_cli(root, &["status", "run"]).stdout)
+            .contains("state: In Progress\n  autonomy: steered\n")
+    );
+}
+
+#[test]
+fn legacy_instances_gain_guided_autonomy_for_every_state() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_movable_definition(&root.join(".flow/definitions/workflow.toml"));
+    let path = root.join(".flow/instances/run.toml");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, "definition = 'workflow'\nstate = 'Design'\n").unwrap();
+
+    let status = run_cli(root, &["status", "run"]);
+    assert!(status.status.success());
+    assert!(String::from_utf8_lossy(&status.stdout).contains("autonomy: guided"));
+    assert!(
+        run_cli(root, &["autonomy", "set", "run", "steered", "Review"])
+            .status
+            .success()
+    );
+    let saved: toml::Value = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(saved["autonomy"]["Design"].as_str(), Some("guided"));
+    assert_eq!(saved["autonomy"]["Review"].as_str(), Some("steered"));
+    assert_eq!(saved["autonomy"]["Done"].as_str(), Some("guided"));
 }
 
 #[test]
@@ -706,6 +943,9 @@ fn new_global_creates_instance_with_global_definition() {
         indoc! {r#"
             definition = "workflow"
             state = "Design"
+
+            [autonomy]
+            Design = "guided"
         "#}
     );
     assert!(!root.join(".flow/instances/run.toml").exists());

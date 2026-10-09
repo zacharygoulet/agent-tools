@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use flow::{
-    ContextUpdate, Definition, DefinitionName, GlobalGuidance, Instance, InstanceName, InstanceSavePolicy,
-    Move, Scope, StateName, Storage,
+    Autonomy, ContextUpdate, Definition, DefinitionName, GlobalGuidance, Instance, InstanceName,
+    InstanceSavePolicy, Move, Scope, StateName, Storage,
 };
 use rust_utils::raise::RaiseExt;
 use uuid::Uuid;
@@ -45,6 +45,11 @@ enum Cli {
         action: ContextAction,
     },
 
+    Autonomy {
+        #[command(subcommand)]
+        action: AutonomyAction,
+    },
+
     NewDefinitionFromTemplate {
         definition_name: DefinitionName,
         #[arg(short, long)]
@@ -71,6 +76,16 @@ enum ContextAction {
     },
 }
 
+#[derive(Subcommand)]
+enum AutonomyAction {
+    Set {
+        instance_name: InstanceName,
+        level: Autonomy,
+        state: String,
+        end_state: Option<String>,
+    },
+}
+
 #[rust_utils::raise_handler]
 fn main() {
     run(Cli::parse());
@@ -88,6 +103,7 @@ fn run(cli: Cli) {
         Cli::Status { instance_name: None } => status_all(),
         Cli::List { target } => list(target),
         Cli::Context { action } => change_context(action),
+        Cli::Autonomy { action } => change_autonomy(action),
         Cli::Next { instance_name, target } => move_instance(instance_name, Move::Next(StateName(target))),
         Cli::Jump { instance_name, target } => move_instance(instance_name, Move::JumpTo(StateName(target))),
     }
@@ -143,6 +159,16 @@ fn status_instance(instance_name: InstanceName) {
     print_optional("details", definition.details().as_deref());
     print_steps(definition.steps());
     println!("state: {}", state.name);
+    let autonomy = instance.current_autonomy();
+    println!("  autonomy: {autonomy}");
+    println!(
+        "    {}",
+        match autonomy {
+            Autonomy::Guided => "Pause for user approval at state boundaries and significant decisions.",
+            Autonomy::Steered => "Proceed by default; ask on consequential choices and report progress.",
+            Autonomy::Autonomous => "Continue independently; stop only for fundamental blockers.",
+        }
+    );
     print_optional("summary", state.summary.as_deref());
     print_optional("details", state.details.as_deref());
     print_steps(&state.steps);
@@ -234,6 +260,22 @@ fn change_context(action: ContextAction) {
         ContextAction::Remove { instance_name, key } => (instance_name, ContextUpdate::Remove { key }),
     };
     Instance::load_from_name(name.as_str()).update_context(change);
+}
+
+fn change_autonomy(action: AutonomyAction) {
+    match action {
+        AutonomyAction::Set { instance_name, level, state, end_state } => {
+            let changed = Instance::load_from_name(instance_name.as_str()).set_autonomy(
+                level,
+                &state,
+                end_state.as_deref(),
+            );
+            println!("set autonomy to {level} for states:");
+            for name in changed {
+                println!("  - {name}");
+            }
+        }
+    }
 }
 
 fn move_instance(instance_name: InstanceName, movement: Move) {

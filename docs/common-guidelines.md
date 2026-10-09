@@ -13,6 +13,34 @@ You usually change state using the `next` command, or you can jump to any state 
 the `jump` command. Required steps should always be done, contextual steps can depend
 on the context and the AI's judgement.
 
+### Autonomy
+
+Each instance starts with **guided** autonomy for every state. The current state's
+level appears in `flow status <instance-name>` and determines how the agent should
+handle decisions while working in that state:
+
+- **Guided:** Pause for user approval at state boundaries and significant decisions.
+  Still drive the work forward by proposing the next action or a clear question.
+- **Steered:** Proceed by default, report progress, and ask the user about
+  consequential choices rather than routine steps.
+- **Autonomous:** Work independently. Gather needed user input before starting,
+  or make the best reasonable guess. Stop only for fundamental blockers, not for
+  routine approval. Continue to report intentions, findings, and outcomes.
+
+These levels guide the agent; Flow does not perform or enforce the work itself.
+To change one state's level, run
+`flow autonomy set <instance> <guided|steered|autonomous> <state>`.
+Add an end state to change every state on any `next` path from the first
+state through the end state:
+`flow autonomy set <instance> <level> <first-state> <last-state>`.
+Quote state names containing spaces. Branches that cannot reach the end state
+are excluded, and traversal stops at the end even if it has outgoing links.
+If there is no `next` path between the endpoints, the command fails without
+changing anything. The command lists every affected state in definition-file
+order for readability; definition order does not determine which states are
+included. Settings persist on the instance and stay with their states when it
+moves. Use `jump` for exceptional moves outside the normal `next` flow.
+
 todo explain context
 
 todo explain steps (global, flow, and state steps)
@@ -23,10 +51,7 @@ todo explain steps (global, flow, and state steps)
 
 ## Global details
 
-todo explain autonomy options (autonomous, steered, guided), where:
-- autonomous means the agent should run fully solo, user input should have been gathered
-before starting, or the agent should use its best guess, stopping only on fundamental
-issues
+Follow the current state's autonomy level as described in Help.
 
 ## Global steps
 
@@ -52,7 +77,6 @@ Cli adjustents:
 
 
 ## Todos
-- have autonomy built in
 - implement help command
 - cli adjustements
 - impl types display for prints instead of from cli

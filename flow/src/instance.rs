@@ -1,11 +1,11 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
 
 use crate::{
-    Definition, DefinitionName, InstanceName, StateName,
+    Definition, DefinitionName, InstanceName, State, StateName,
     file_writer::FileWriter,
     storage::{Scope, Storage},
 };
@@ -22,6 +22,20 @@ pub struct Instance {
     state: StateName,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     context: BTreeMap<String, String>,
+    #[serde(default)]
+    autonomy: BTreeMap<String, Autonomy>,
+}
+
+#[derive(
+    Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq, strum::Display, strum::EnumString,
+)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum Autonomy {
+    Autonomous,
+    Steered,
+    #[default]
+    Guided,
 }
 
 pub enum Move {
@@ -71,7 +85,12 @@ impl Instance {
     pub fn new(name: InstanceName, definition: Definition) -> Self {
         definition.validate();
         let state = definition.initial_state().clone();
-        let instance = Self { name, definition, state, context: BTreeMap::new() };
+        let autonomy = definition
+            .states()
+            .iter()
+            .map(|state| (state.name.clone(), Autonomy::Guided))
+            .collect();
+        let instance = Self { name, definition, state, context: BTreeMap::new(), autonomy };
         instance.validate_current_state();
         instance
     }
@@ -138,6 +157,45 @@ impl Instance {
         self
     }
 
+    pub fn set_autonomy(mut self, level: Autonomy, start: &str, end: Option<&str>) -> Vec<String> {
+        let affected = self.select_autonomy_states(start, end);
+        for name in &affected {
+            self.autonomy.insert(name.clone(), level);
+        }
+        self.save_existing();
+        affected
+    }
+
+    fn select_autonomy_states(&self, start: &str, end: Option<&str>) -> Vec<String> {
+        let states = self.definition.states();
+        for name in [Some(start), end].into_iter().flatten() {
+            if !states.iter().any(|state| state.name == name) {
+                raise::raise(format!(
+                    "unknown state {name:?} in definition {:?}",
+                    self.definition.name()
+                ));
+            }
+        }
+
+        let Some(end) = end else {
+            return vec![start.to_owned()];
+        };
+
+        states_on_next_paths(states, start, end).unwrap_or_else(|| {
+            raise::raise(format!(
+                "no next path from {start:?} to {end:?} in definition {:?}",
+                self.definition.name()
+            ))
+        })
+    }
+
+    pub fn current_autonomy(&self) -> Autonomy {
+        *self
+            .autonomy
+            .get(&self.state.0)
+            .expect("current state autonomy was initialized")
+    }
+
     pub fn save_new(&self, policy: InstanceSavePolicy) -> PathBuf {
         let path = Storage::current().new_instance_path(self.name.as_str(), policy.scope());
         policy.prepare_definition(&self.definition);
@@ -151,6 +209,22 @@ impl Instance {
         let mut instance = Self::deserialize_from_path(&path);
         instance.name = name;
         instance.validate_current_state();
+        for state in instance.definition.states() {
+            instance.autonomy.entry(state.name.clone()).or_default();
+        }
+        for name in instance.autonomy.keys() {
+            if !instance
+                .definition
+                .states()
+                .iter()
+                .any(|state| &state.name == name)
+            {
+                raise::raise(format!(
+                    "instance {:?} has autonomy for unknown state {name:?}",
+                    instance.name
+                ));
+            }
+        }
         instance
     }
 
@@ -197,6 +271,49 @@ impl Instance {
     }
 }
 
+fn states_on_next_paths(states: &[State], start: &str, end: &str) -> Option<Vec<String>> {
+    let mut reachable_from_start = HashSet::new();
+    let mut to_visit = vec![start];
+    while let Some(name) = to_visit.pop() {
+        if !reachable_from_start.insert(name) || name == end {
+            continue;
+        }
+        let state = states
+            .iter()
+            .find(|state| state.name == name)
+            .expect("state was validated");
+        to_visit.extend(state.next.iter().map(|next| next.0.as_str()));
+    }
+
+    if !reachable_from_start.contains(end) {
+        return None;
+    }
+
+    let mut can_reach_end = HashSet::new();
+    let mut to_visit = vec![end];
+    while let Some(name) = to_visit.pop() {
+        if !can_reach_end.insert(name) {
+            continue;
+        }
+        to_visit.extend(
+            states
+                .iter()
+                .filter(|state| state.next.iter().any(|next| next.0 == name))
+                .map(|state| state.name.as_str()),
+        );
+    }
+    Some(
+        states
+            .iter()
+            .filter(|state| {
+                reachable_from_start.contains(state.name.as_str())
+                    && can_reach_end.contains(state.name.as_str())
+            })
+            .map(|state| state.name.clone())
+            .collect(),
+    )
+}
+
 fn load_definition<'de, D>(deserializer: D) -> std::result::Result<Definition, D::Error>
 where
     D: Deserializer<'de>,
@@ -215,7 +332,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{Definition, Instance, Move, StateName};
+    use super::{Definition, Instance, Move, StateName, states_on_next_paths};
     use crate::{DefinitionName, InstanceName, State};
     use indoc::indoc;
     use rust_utils::raise::catch_raised;
@@ -243,6 +360,45 @@ mod tests {
                 ],
             ),
         )
+    }
+
+    #[test]
+    fn next_path_selection_includes_branches_and_loops_before_end() {
+        let states = vec![
+            state("End", vec![StateName("After".into())]),
+            state(
+                "Start",
+                vec![
+                    StateName("Left".into()),
+                    StateName("Right".into()),
+                    StateName("Dead".into()),
+                ],
+            ),
+            state("Left", vec![StateName("Loop".into()), StateName("End".into())]),
+            state("Right", vec![StateName("End".into())]),
+            state("Dead", vec![]),
+            state("Loop", vec![StateName("Left".into())]),
+            state("After", vec![StateName("End".into())]),
+        ];
+
+        assert_eq!(
+            states_on_next_paths(&states, "Start", "End"),
+            Some(
+                vec!["End", "Start", "Left", "Right", "Loop"]
+                    .into_iter()
+                    .map(String::from)
+                    .collect()
+            )
+        );
+        assert_eq!(
+            states_on_next_paths(&states, "Start", "Dead"),
+            Some(vec!["Start", "Dead"].into_iter().map(String::from).collect())
+        );
+        assert_eq!(states_on_next_paths(&states, "Dead", "End"), None);
+        assert_eq!(
+            states_on_next_paths(&states, "End", "End"),
+            Some(vec!["End".into()])
+        );
     }
 
     #[test]

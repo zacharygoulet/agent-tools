@@ -8,6 +8,7 @@ rust-utils = { git = "https://github.com/zacharygoulet/rust-utils" }
 clap = { version = "4", features = ["derive"] }
 getset = "0.1.7"
 serde = { version = "1", features = ["derive"] }
+strum = { version = "0.27", features = ["derive"] }
 tempfile = "3"
 toml = "0.9"
 uuid = { version = "1", features = ["v4"] }

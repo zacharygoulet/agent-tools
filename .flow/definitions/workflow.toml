@@ -57,7 +57,7 @@ steps = [
     "Consider a persisted plan if complexity warrants it.",
     "Get approval before coding.",
 ]
-next = ["Implement", "Define"]
+next = ["Implement"]
 
 [[states]]
 name = "Implement"
@@ -78,7 +78,7 @@ steps = [
     "Consider incremental commits if they help review.",
     "Explain the changes to the user"
 ]
-next = ["Improve and Clean", "Define"]
+next = ["Improve and Clean"]
 
 [[states]]
 name = "Improve and Clean"
@@ -93,7 +93,7 @@ steps = [
     "Refine the implementation if needed.",
     "Ensure the build passes.",
 ]
-next = ["Test", "Design"]
+next = ["Test"]
 
 [[states]]
 name = "Test"
@@ -109,7 +109,7 @@ steps = [
     "Run relevant lints and tests.",
     "Consider manual checks if automated validation is insufficient.",
 ]
-next = ["Finalize", "Implement", "Design"]
+next = ["Finalize"]
 
 [[states]]
 name = "Finalize"
