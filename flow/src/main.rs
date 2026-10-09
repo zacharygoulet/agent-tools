@@ -1,7 +1,9 @@
+mod output;
+
 use clap::{Parser, Subcommand};
 use flow::{
-    Autonomy, ContextUpdate, Definition, DefinitionName, GlobalGuidance, Instance, InstanceName,
-    InstanceSavePolicy, Move, Scope, StateName, Storage,
+    Autonomy, ContextUpdate, Definition, DefinitionName, Instance, InstanceName, InstanceSavePolicy, Move,
+    Scope, StateName, Storage,
 };
 use rust_utils::raise::RaiseExt;
 use uuid::Uuid;
@@ -149,175 +151,38 @@ fn start(
     let definition = Definition::load_from_name(definition_name.as_str());
     let instance = definition.into_new_instance(name);
     let path = instance.save_new(InstanceSavePolicy::from_cli_args(global, copy_definition));
-    println!("created instance {} at {}", instance.name(), path.display());
+    println!("{}", output::created_instance(&instance, &path));
 }
 
 fn create_definition_from_template(definition_name: DefinitionName, global: bool) {
     let scope = if global { Scope::Global } else { Scope::Local };
     let path = Definition::create_from_template(definition_name.clone(), DEFINITION_TEMPLATE, scope);
-    println!("created definition {} at {}", definition_name, path.display());
+    println!("{}", output::created_definition(&definition_name, &path));
 }
 
 fn status_instance(instance_name: InstanceName) {
     let instance = Instance::load_from_name(instance_name.as_str());
-    let definition = instance.definition();
-    let state = definition
-        .states()
-        .iter()
-        .find(|state| state.name == instance.state().0)
-        .expect("the instance state was validated when it was loaded");
-
-    println!("instance: {}", instance.name());
-    if !instance.context().is_empty() {
-        println!("context:");
-        print!(
-            "{}",
-            toml::to_string(instance.context()).expect("context strings serialize to TOML")
-        );
-    }
-    if *definition.use_global() {
-        let guidance = GlobalGuidance::bundled();
-        println!("global:");
-        print_optional("details", guidance.details().as_deref());
-        print_steps(guidance.steps());
-    }
-    println!("definition: {}", definition.name());
-    print_optional("summary", definition.summary().as_deref());
-    print_optional("details", definition.details().as_deref());
-    print_steps(definition.steps());
-    println!("state: {}", state.name);
-    let autonomy = instance.current_autonomy();
-    println!("  autonomy: {autonomy}");
-    println!(
-        "    {}",
-        match autonomy {
-            Autonomy::Guided => "Pause for user approval at state boundaries and significant decisions.",
-            Autonomy::Steered => "Proceed by default; ask on consequential choices and report progress.",
-            Autonomy::Autonomous => "Continue independently; stop only for fundamental blockers.",
-        }
-    );
-    print_optional("summary", state.summary.as_deref());
-    print_optional("details", state.details.as_deref());
-    print_steps(&state.steps);
-
-    if !state.next.is_empty() {
-        println!("next states:");
-        for next in &state.next {
-            let next_state = definition
-                .states()
-                .iter()
-                .find(|candidate| candidate.name == next.0)
-                .expect("definition transitions were validated when it was loaded");
-            match next_state.summary.as_deref() {
-                Some(summary) => println!("  - {}: {summary}", next.0),
-                None => println!("  - {}", next.0),
-            }
-        }
-    }
-}
-
-fn print_optional(label: &str, value: Option<&str>) {
-    if let Some(value) = value {
-        let mut lines = value.trim_end_matches('\n').split('\n');
-        println!("  {label}: {}", lines.next().unwrap_or_default());
-        for line in lines {
-            println!("    {line}");
-        }
-    }
-}
-
-fn print_steps(steps: &[String]) {
-    if steps.is_empty() {
-        return;
-    }
-
-    println!("  steps:");
-    for step in steps {
-        println!("    - {step}");
-    }
+    print!("{}", output::InstanceStatus(&instance));
 }
 
 fn status_all() {
     let instances = Instance::load_all();
-    if instances.is_empty() {
-        println!("no instances found");
-        return;
-    }
-
-    let instance_width = instances
-        .iter()
-        .map(|instance| instance.name().as_str().len())
-        .max()
-        .unwrap_or(0)
-        .max("INSTANCE".len());
-    let definition_width = instances
-        .iter()
-        .map(|instance| instance.definition().name().as_str().len())
-        .max()
-        .unwrap_or(0)
-        .max("DEFINITION".len());
-    println!(
-        "{:<instance_width$}  {:<definition_width$}  STATE",
-        "INSTANCE", "DEFINITION"
-    );
-    println!(
-        "{}  {}  -----",
-        "-".repeat(instance_width),
-        "-".repeat(definition_width)
-    );
-    for instance in instances {
-        println!(
-            "{:<instance_width$}  {:<definition_width$}  {}",
-            instance.name(),
-            instance.definition().name(),
-            instance.state().0
-        );
-    }
+    print!("{}", output::InstancesTable(&instances));
 }
 
 fn list(target: ListTarget) {
     match target {
         ListTarget::Definitions => {
             let names = Storage::current().definition_names();
-            if names.is_empty() {
-                println!("no definitions found");
-                return;
-            }
-            let rows = names
-                .into_iter()
-                .map(|name| {
-                    let definition = Definition::load_from_name(name.as_str());
-                    (name.to_string(), definition.summary().clone().unwrap_or_default())
-                })
+            let definitions: Vec<_> = names
+                .iter()
+                .map(|name| Definition::load_from_name(name.as_str()))
                 .collect();
-            print_list_table("DEFINITION", rows);
+            print!("{}", output::DefinitionsTable(&definitions));
         }
         ListTarget::States { definition_name } => {
             let definition = Definition::load_from_name(definition_name.as_str());
-            let rows = definition
-                .states()
-                .iter()
-                .map(|state| (state.name.clone(), state.summary.clone().unwrap_or_default()))
-                .collect();
-            print_list_table("STATE", rows);
-        }
-    }
-}
-
-fn print_list_table(header: &str, rows: Vec<(String, String)>) {
-    let width = rows
-        .iter()
-        .map(|(name, _)| name.chars().count())
-        .max()
-        .unwrap_or(0)
-        .max(header.len());
-    println!("{header:<width$}  SUMMARY");
-    println!("{}  -------", "-".repeat(width));
-    for (name, summary) in rows {
-        if summary.is_empty() {
-            println!("{name}");
-        } else {
-            println!("{name:<width$}  {summary}");
+            print!("{}", output::StatesTable(&definition));
         }
     }
 }
@@ -340,19 +205,12 @@ fn change_autonomy(action: AutonomyAction) {
                 &state,
                 end_state.as_deref(),
             );
-            println!("set autonomy to {level} for states:");
-            for name in changed {
-                println!("  - {name}");
-            }
+            print!("{}", output::autonomy_changed(level, &changed));
         }
     }
 }
 
 fn move_instance(instance_name: InstanceName, movement: Move) {
     let instance = Instance::load_from_name(instance_name.as_str()).move_to(movement);
-    println!(
-        "instance {} is now in state {}",
-        instance.name(),
-        instance.state().0
-    );
+    println!("{}", output::moved_instance(&instance));
 }
