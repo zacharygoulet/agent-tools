@@ -5,7 +5,7 @@ steps = [
     "Drive the flow proactively toward completion or a clear user decision.",
     "Communicate intentions, findings, decisions, and outcomes as work progresses.",
     "Consider loading relevant skills.",
-    "Consider saving context notes if info is relevent to upcomming states."
+    "Consider saving context notes if info is relevent to upcomming states.",
     "Consider compacting context if context is bloated or irrelevant for following work.",
     "Consider a subagent (possible reasons: prevent context bloat, use specialized model, parallel work).",
 ]
