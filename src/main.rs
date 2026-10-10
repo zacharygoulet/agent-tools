@@ -28,7 +28,24 @@ enum Cli {
         /// Save globally, copying the local flow if absent globally.
         #[arg(short = 'G', long = "copy-flow")]
         copy_flow: bool,
+        /// Claim the new instance for this agent.
+        #[arg(long)]
+        owner: Option<String>,
     },
+
+    /// Claim an unowned instance, or confirm the existing claim for the same owner.
+    Resume {
+        instance_name: InstanceName,
+        /// Agent identifier to claim the instance for.
+        #[arg(long)]
+        owner: String,
+    },
+
+    /// Release ownership of an instance. Consider adding handoff context first.
+    Pause { instance_name: InstanceName },
+
+    /// Delete an instance.
+    Stop { instance_name: InstanceName },
 
     /// Move to a listed next state.
     Next {
@@ -122,8 +139,20 @@ fn main() {
 
 fn run(cli: Cli) {
     match cli {
-        Cli::Start { flow_name, instance_name, global, copy_flow } => {
-            start(flow_name, instance_name, global, copy_flow)
+        Cli::Start { flow_name, instance_name, global, copy_flow, owner } => {
+            start(flow_name, instance_name, global, copy_flow, owner)
+        }
+        Cli::Resume { instance_name, owner } => {
+            Instance::load_from_name(instance_name.as_str()).claim(owner);
+            println!("instance {instance_name} claimed");
+        }
+        Cli::Pause { instance_name } => {
+            Instance::load_from_name(instance_name.as_str()).release();
+            println!("instance {instance_name} is unowned");
+        }
+        Cli::Stop { instance_name } => {
+            Instance::stop_from_name(instance_name.as_str());
+            println!("stopped instance {instance_name}");
         }
         Cli::NewFlowFromTemplate { flow_name, global } => create_flow_from_template(flow_name, global),
         Cli::Status { instance_name: Some(instance_name) } => status_instance(instance_name),
@@ -136,12 +165,21 @@ fn run(cli: Cli) {
     }
 }
 
-fn start(flow_name: FlowName, instance_name: Option<InstanceName>, global: bool, copy_flow: bool) {
+fn start(
+    flow_name: FlowName,
+    instance_name: Option<InstanceName>,
+    global: bool,
+    copy_flow: bool,
+    owner: Option<String>,
+) {
     let name = instance_name
         .unwrap_or_else(|| InstanceName::parse(format!("{}-{}", flow_name, Uuid::new_v4().simple())).raise());
 
     let flow = Flow::load_from_name(flow_name.as_str());
-    let instance = flow.into_new_instance(name);
+    let mut instance = flow.into_new_instance(name);
+    if let Some(owner) = owner {
+        instance = instance.with_owner(owner);
+    }
     let path = instance.save_new(InstanceSavePolicy::from_cli_args(global, copy_flow));
     println!("{}", output::created_instance(&instance, &path));
 }

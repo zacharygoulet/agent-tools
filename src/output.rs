@@ -30,6 +30,11 @@ impl fmt::Display for InstanceStatus<'_> {
             "autonomy: {autonomy} ({})",
             autonomy_description(autonomy)
         )?;
+        writeln!(
+            formatter,
+            "owner: {}",
+            instance.owner().as_deref().unwrap_or("unowned")
+        )?;
 
         if !instance.context().is_empty() {
             writeln!(formatter, "context:")?;
@@ -129,23 +134,31 @@ impl fmt::Display for InstancesTable<'_> {
             .max()
             .unwrap_or(0)
             .max("FLOW".len());
+        let owner_width = instances
+            .iter()
+            .map(|instance| instance.owner().as_deref().unwrap_or("unowned").len())
+            .max()
+            .unwrap_or(0)
+            .max("OWNER".len());
         writeln!(
             formatter,
-            "{:<instance_width$}  {:<flow_width$}  STATE",
-            "INSTANCE", "FLOW"
+            "{:<instance_width$}  {:<flow_width$}  {:<owner_width$}  STATE",
+            "INSTANCE", "FLOW", "OWNER"
         )?;
         writeln!(
             formatter,
-            "{}  {}  -----",
+            "{}  {}  {}  -----",
             "-".repeat(instance_width),
-            "-".repeat(flow_width)
+            "-".repeat(flow_width),
+            "-".repeat(owner_width)
         )?;
         for instance in instances {
             writeln!(
                 formatter,
-                "{:<instance_width$}  {:<flow_width$}  {}",
+                "{:<instance_width$}  {:<flow_width$}  {:<owner_width$}  {}",
                 instance.name(),
                 instance.flow().name(),
+                instance.owner().as_deref().unwrap_or("unowned"),
                 instance.state().0
             )?;
         }

@@ -24,6 +24,8 @@ pub struct Instance {
     context: BTreeMap<String, String>,
     #[serde(default)]
     autonomy: BTreeMap<String, Autonomy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    owner: Option<String>,
 }
 
 #[derive(
@@ -90,7 +92,7 @@ impl Instance {
             .iter()
             .map(|state| (state.name.clone(), Autonomy::Guided))
             .collect();
-        let instance = Self { name, flow, state, context: BTreeMap::new(), autonomy };
+        let instance = Self { name, flow, state, context: BTreeMap::new(), autonomy, owner: None };
         instance.validate_current_state();
         instance
     }
@@ -132,6 +134,33 @@ impl Instance {
         self.apply_move(movement);
         self.save_existing();
         self
+    }
+
+    pub fn with_owner(mut self, owner: String) -> Self {
+        self.owner = Some(owner);
+        self
+    }
+
+    pub fn claim(mut self, owner: String) -> Self {
+        match self.owner.as_deref() {
+            Some(existing) if existing == owner => return self,
+            Some(existing) => raise::raise(format!("instance {:?} is owned by {existing:?}", self.name)),
+            None => self.owner = Some(owner),
+        }
+        self.save_existing();
+        self
+    }
+
+    pub fn release(mut self) -> Self {
+        self.owner = None;
+        self.save_existing();
+        self
+    }
+
+    pub fn stop_from_name(name: &str) {
+        let name = InstanceName::parse(name).raise();
+        let path = Storage::current().find_instance(name.as_str());
+        fs::remove_file(&path).raise_with_context(|| format!("deleting instance file {}", path.display()));
     }
 
     pub fn update_context(mut self, update: ContextUpdate) -> Self {

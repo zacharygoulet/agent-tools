@@ -4,7 +4,8 @@ A flow describes states, their guidance, and normal next transitions. Start an
 instance from a flow, use status to read its current guidance, move with next,
 or use jump for exceptional moves.
 
-Instances can be assigned autonomy level per state, and per instance context.
+Instances can be assigned autonomy level per state, per-instance context, and an
+optional informational owner. Ownership does not block operations.
 
 Context is a persistent set of compact reminders or pointers for later states, such as
 an issue ID or plan URL. Values are limited to 150 characters; keep detailed plans,
@@ -17,4 +18,8 @@ only for fundamental blockers. Set each level with autonomy set.
 
 Use 'flows status' to see available instances
 Use 'flows start' to start a new instance
+Use 'flows resume' to claim an unowned instance
+Use 'flows pause' to release ownership. Before pausing, consider whether another
+agent will continue; if so, add concise handoff context first.
+Use 'flows stop' to delete an instance
 Use 'flows help <command>' for a command's arguments and options.

@@ -52,3 +52,17 @@ short reminders and pointers (such as an issue ID or plan URL), not detailed
 plans, requirements, or notes. The CLI limits each value to 150 characters.
 
 Use `jump` instead of `next` for an exceptional move to any defined state.
+
+Instances can optionally be claimed with an informational owner ID:
+
+```sh
+cargo run -- start workflow run --owner agent-123
+cargo run -- pause run
+cargo run -- resume run --owner agent-456
+cargo run -- stop run
+```
+
+`resume` claims an unowned instance, succeeds unchanged for the same owner, and
+rejects a different owner. Ownership does not block other operations and is not
+a concurrency lock. Before pausing, consider whether another agent needs a
+handoff; if so, add concise context first. `stop` deletes the instance.

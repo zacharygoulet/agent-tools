@@ -316,7 +316,7 @@ fn status_lists_local_and_global_instances_in_name_order() {
     );
     assert_eq!(
         String::from_utf8_lossy(&status.stdout),
-        "INSTANCE    FLOW      STATE\n----------  --------  -----\nglobal-run  workflow  Design\nlocal-run   workflow  Design\n"
+        "INSTANCE    FLOW      OWNER    STATE\n----------  --------  -------  -----\nglobal-run  workflow  unowned  Design\nlocal-run   workflow  unowned  Design\n"
     );
 }
 
@@ -422,6 +422,7 @@ fn status_displays_flow_state_and_next_state_metadata() {
             flow: workflow (Whole workflow summary)
             current state: Draft (Prepare the work)
             autonomy: guided (Pause for user approval at state boundaries and significant decisions.)
+            owner: unowned
 
             Flow details:
             Flow-wide details
@@ -1107,6 +1108,61 @@ fn new_global_requires_global_flow_even_if_local_exists() {
     assert!(error.contains("global flow \"workflow\" not found"), "{error}");
     assert!(error.contains("global/flows/workflow.toml"), "{error}");
     assert!(!root.join("global/flows/instances/run.toml").exists());
+}
+
+#[test]
+fn ownership_can_be_claimed_released_and_stopped() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_local_flow(root);
+
+    let started = run_cli(root, &["start", "workflow", "run", "--owner", "agent-a"]);
+    assert!(
+        started.status.success(),
+        "{}",
+        String::from_utf8_lossy(&started.stderr)
+    );
+    let path = root.join(".flows/instances/run.toml");
+    let saved: toml::Value = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(saved["owner"].as_str(), Some("agent-a"));
+    assert!(String::from_utf8_lossy(&run_cli(root, &["status"]).stdout).contains("agent-a"));
+
+    assert!(
+        run_cli(root, &["resume", "run", "--owner", "agent-a"])
+            .status
+            .success()
+    );
+    let rejected = run_cli(root, &["resume", "run", "--owner", "agent-b"]);
+    assert!(!rejected.status.success());
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains("owned by \"agent-a\""));
+
+    assert!(run_cli(root, &["pause", "run"]).status.success());
+    let saved: toml::Value = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert!(saved.get("owner").is_none());
+    assert!(
+        run_cli(root, &["resume", "run", "--owner", "agent-b"])
+            .status
+            .success()
+    );
+    assert!(run_cli(root, &["stop", "run"]).status.success());
+    assert!(!path.exists());
+}
+
+#[test]
+fn stop_can_delete_an_instance_when_its_flow_is_missing() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let path = root.join(".flows/instances/run.toml");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, "flow = 'missing'\nstate = 'Unknown'\n").unwrap();
+
+    let stopped = run_cli(root, &["stop", "run"]);
+    assert!(
+        stopped.status.success(),
+        "{}",
+        String::from_utf8_lossy(&stopped.stderr)
+    );
+    assert!(!path.exists());
 }
 
 #[test]

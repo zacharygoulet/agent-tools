@@ -29,6 +29,12 @@ executable on PATH and integrating it with Pi.
   reminders and pointers callers need across states. The CLI limits values to
   150 characters. Context informs callers but does not guard moves. Instances
   without context load as an empty map.
+- An instance may have an optional string `owner`. Ownership is advisory and
+  does not block moves or edits. `resume` claims an unowned instance, is
+  idempotent for the same owner, and rejects a different owner. `pause` clears
+  ownership and advises callers to add concise handoff context first when
+  another agent will continue. `stop` deletes the instance without prompting.
+  Ownership is not a lock; simultaneous claims and writes are not coordinated.
 
 ## Files and lookup
 
@@ -65,7 +71,9 @@ executable on PATH and integrating it with Pi.
   `flows context set <instance-name> <key> <value>` adds or replaces a context
   value; `flows context remove <instance-name> <key>` removes one.
   `flows autonomy set` configures an instance's autonomy for one state or a
-  range of states reachable along listed next paths.
+  range of states reachable along listed next paths. `flows resume` claims an
+  unowned instance for an owner ID, `flows pause` releases it, and `flows stop`
+  deletes it. Status output shows ownership.
 - `start -g` stores an instance globally and requires a valid global flow.
   `start -G` implies global storage and copies a valid local flow if the global
   one is absent. It never replaces an existing global flow. Instance-name
@@ -86,10 +94,10 @@ executable on PATH and integrating it with Pi.
 ## Current state and follow-up
 
 The repository is a standalone Cargo package named `flows`. It provides
-`start`, `new-flow-from-template`, and `status`; validated flows; in-memory and
-durable movement; CLI tests; and a panic-catching `main`. There is no movement
-history or Pi extension yet. Generated instance names use flow-prefixed random
-UUIDs.
+`start`, `new-flow-from-template`, `status`, advisory instance ownership, and
+lifecycle commands; validated flows; in-memory and durable movement; CLI tests;
+and a panic-catching `main`. There is no movement history or Pi extension yet.
+Generated instance names use flow-prefixed random UUIDs.
 
 The previous storage layout was `.flow/{definitions,instances}/` locally and
 `$XDG_STATE_HOME/flow/{definitions,instances}/` globally; instance files used
