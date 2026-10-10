@@ -1,3 +1,8 @@
+details = """
+IMPORTANT, all steps are MANDATORY. They should all be done or considered by the agent
+before stopping for user feedback or changing state.
+"""
+
 steps = [
     "Drive the flow proactively toward completion or a clear user decision.",
     "Accompany questions with your suggestions.",
