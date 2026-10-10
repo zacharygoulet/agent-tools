@@ -72,7 +72,7 @@ enum Cli {
         target: String,
     },
 
-    /// Show an instance's guidance or list all instances.
+    /// Show an instance's current state guidance or list all instances.
     Status {
         /// Instance to inspect; omit to list all instances.
         instance_name: Option<InstanceName>,
