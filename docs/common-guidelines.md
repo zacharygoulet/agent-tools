@@ -1,3 +1,1 @@
-- trim tests
-- update template.toml to show all features
 - review commands display (human readable)
