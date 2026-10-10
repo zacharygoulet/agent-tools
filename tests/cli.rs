@@ -79,6 +79,36 @@ fn write_movable_flow(path: &Path) {
 }
 
 #[test]
+fn rename_moves_local_instance_and_preserves_its_data() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_local_flow(root);
+    assert!(
+        run_cli(root, &["start", "workflow", "run", "--owner", "agent"])
+            .status
+            .success()
+    );
+    assert!(
+        run_cli(root, &["context", "set", "run", "goal", "finish"])
+            .status
+            .success()
+    );
+
+    let renamed = run_cli(root, &["rename", "run", "paused-review"]);
+    assert!(
+        renamed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&renamed.stderr)
+    );
+    assert!(!root.join(".flows/instances/run.toml").exists());
+    let status = run_cli(root, &["status", "paused-review"]);
+    assert!(status.status.success());
+    let text = String::from_utf8_lossy(&status.stdout);
+    assert!(text.contains("agent"), "{text}");
+    assert!(text.contains("goal = "), "{text}");
+}
+
+#[test]
 fn help_explains_flow_then_lists_clap_commands() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
@@ -99,6 +129,7 @@ fn help_explains_flow_then_lists_clap_commands() {
         "status",
         "list",
         "context",
+        "rename",
         "autonomy",
         "new-flow-from-template",
     ] {

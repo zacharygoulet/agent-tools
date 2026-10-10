@@ -38,6 +38,7 @@ cargo run -- status
 cargo run -- status run
 cargo run -- context set run goal "Finish review"
 cargo run -- context remove run goal
+cargo run -- rename run feature-review
 ```
 
 An instance is stored in `.flows/instances/` (with `.toml` files) by default.
@@ -65,4 +66,6 @@ cargo run -- stop run
 `resume` claims an unowned instance, succeeds unchanged for the same owner, and
 rejects a different owner. Ownership does not block other operations and is not
 a concurrency lock. Before pausing, consider whether another agent needs a
-handoff; if so, add concise context first. `stop` deletes the instance.
+handoff; if so, add concise context first. Rename generated instance names with
+`cargo run -- rename <current-name> <new-name>` before pausing or handing off.
+`stop` deletes the instance.

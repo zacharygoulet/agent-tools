@@ -157,6 +157,21 @@ impl Instance {
         self
     }
 
+    pub fn rename(mut self, new_name: InstanceName) -> Self {
+        let storage = Storage::current();
+        let old_path = storage.find_instance(self.name.as_str());
+        let new_path = storage.rename_instance_path(self.name.as_str(), new_name.as_str());
+        self.name = new_name;
+        fs::rename(&old_path, &new_path).raise_with_context(|| {
+            format!(
+                "renaming instance file {} to {}",
+                old_path.display(),
+                new_path.display()
+            )
+        });
+        self
+    }
+
     pub fn stop_from_name(name: &str) {
         let name = InstanceName::parse(name).raise();
         let path = Storage::current().find_instance(name.as_str());

@@ -156,6 +156,25 @@ impl Storage {
         names.into_iter().collect()
     }
 
+    pub fn rename_instance_path(&self, old_name: &str, new_name: &str) -> PathBuf {
+        let old_path = self.find_instance(old_name);
+        let local = self.path(new_name, StorageFile::Instance, Scope::Local);
+        let global = self.path(new_name, StorageFile::Instance, Scope::Global);
+        for path in [&local, &global] {
+            if path.exists() {
+                raise::raise(format!(
+                    "instance {new_name:?} already exists at {}",
+                    path.display()
+                ));
+            }
+        }
+        if old_path.parent() == Some(local.parent().expect("instance path has a parent")) {
+            local
+        } else {
+            global
+        }
+    }
+
     pub fn new_instance_path(&self, name: &str, scope: Scope) -> PathBuf {
         let local = self.path(name, StorageFile::Instance, Scope::Local);
         let global = self.path(name, StorageFile::Instance, Scope::Global);

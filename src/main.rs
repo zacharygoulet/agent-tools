@@ -44,6 +44,12 @@ enum Cli {
     /// Release ownership of an instance. Consider adding handoff context first.
     Pause { instance_name: InstanceName },
 
+    /// Rename an instance.
+    Rename {
+        instance_name: InstanceName,
+        new_name: InstanceName,
+    },
+
     /// Delete an instance.
     Stop { instance_name: InstanceName },
 
@@ -149,6 +155,10 @@ fn run(cli: Cli) {
         Cli::Pause { instance_name } => {
             Instance::load_from_name(instance_name.as_str()).release();
             println!("instance {instance_name} is unowned");
+        }
+        Cli::Rename { instance_name, new_name } => {
+            Instance::load_from_name(instance_name.as_str()).rename(new_name.clone());
+            println!("renamed instance {instance_name} to {new_name}");
         }
         Cli::Stop { instance_name } => {
             Instance::stop_from_name(instance_name.as_str());
