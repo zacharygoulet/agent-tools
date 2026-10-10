@@ -1180,6 +1180,40 @@ fn ownership_can_be_claimed_released_and_stopped() {
 }
 
 #[test]
+fn complete_deletes_an_instance_only_at_a_terminal_state() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_local_flow(root);
+    let path = root.join(".flows/instances/run.toml");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, "flow = 'workflow'\nstate = 'Design'\n").unwrap();
+
+    let completed = run_cli(root, &["complete", "run"]);
+    assert!(
+        completed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&completed.stderr)
+    );
+    assert!(String::from_utf8_lossy(&completed.stdout).contains("completed instance run"));
+    assert!(!path.exists());
+}
+
+#[test]
+fn complete_preserves_an_instance_with_available_next_states() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_movable_flow(&root.join(".flows/workflow.toml"));
+    let path = root.join(".flows/instances/run.toml");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, "flow = 'workflow'\nstate = 'Design'\n").unwrap();
+
+    let completed = run_cli(root, &["complete", "run"]);
+    assert!(!completed.status.success());
+    assert!(String::from_utf8_lossy(&completed.stderr).contains("state has next transitions"));
+    assert!(path.exists());
+}
+
+#[test]
 fn stop_can_delete_an_instance_when_its_flow_is_missing() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();

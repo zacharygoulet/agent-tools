@@ -23,9 +23,9 @@ autonomy set.
 Use `flows status` to see available instances.
 Use `flows start` to start a new instance.
 Use `flows resume` to claim an unowned instance.
-Use `flows rename` to give an instance a descriptive name, including before
-pausing it for later continuation.
+Use `flows rename` to give an instance a descriptive name, including before pausing it for later continuation.
 Use `flows pause` to release ownership. Consider adding handoff context first and renaming the instance.
 Use `flows rename <current-name> <new-name>` to rename an instance.
 Use `flows stop` to delete an instance.
+Use `flows complete <name>` to delete an instance after it reaches a state with no next transitions.
 Use `flows help <command>` for a command's arguments and options.

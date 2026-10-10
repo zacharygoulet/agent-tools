@@ -53,6 +53,9 @@ enum Cli {
     /// Delete an instance.
     Stop { instance_name: InstanceName },
 
+    /// Complete and delete an instance in a terminal state.
+    Complete { instance_name: InstanceName },
+
     /// Move to a listed next state.
     Next {
         /// Instance to move.
@@ -163,6 +166,10 @@ fn run(cli: Cli) {
         Cli::Stop { instance_name } => {
             Instance::stop_from_name(instance_name.as_str());
             println!("stopped instance {instance_name}");
+        }
+        Cli::Complete { instance_name } => {
+            Instance::complete_from_name(instance_name.as_str());
+            println!("completed instance {instance_name}");
         }
         Cli::NewFlowFromTemplate { flow_name, global } => create_flow_from_template(flow_name, global),
         Cli::Status { instance_name: Some(instance_name) } => status_instance(instance_name),

@@ -178,6 +178,23 @@ impl Instance {
         fs::remove_file(&path).raise_with_context(|| format!("deleting instance file {}", path.display()));
     }
 
+    pub fn complete_from_name(name: &str) {
+        let instance = Self::load_from_name(name);
+        let current_state = instance
+            .flow
+            .states()
+            .iter()
+            .find(|state| state.name == instance.state.0)
+            .expect("current state was validated");
+        if !current_state.next.is_empty() {
+            raise::raise(format!(
+                "cannot complete instance {:?} in state {:?}: state has next transitions",
+                instance.name, instance.state.0
+            ));
+        }
+        Self::stop_from_name(instance.name.as_str());
+    }
+
     pub fn update_context(mut self, update: ContextUpdate) -> Self {
         match update {
             ContextUpdate::Set { key, value } => {
