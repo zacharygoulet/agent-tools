@@ -1,11 +1,11 @@
 details = """
 IMPORTANT, all steps are MANDATORY. They should all be done or considered by the agent
-before stopping for user feedback or changing state.
+before stopping for user feedback, so that you can have more context for your user questions
+or explaining your choices and recommandations.
 """
 
 steps = [
-    "Drive the flow proactively toward completion or a clear user decision.",
-    "Accompany questions with your suggestions.",
+    "Drive the flow proactively toward completion making informed choices or asking for user input with your recommendations",
     "Communicate intentions, findings, decisions, and outcomes as work progresses.",
     "Consider loading relevant skills.",
     "Consider saving context notes if info is relevent to upcomming states.",
