@@ -1,8 +1,6 @@
-details = """
-Use the current state's guidance to drive the work.
-"""
 steps = [
     "Drive the flow proactively toward completion or a clear user decision.",
+    "Accompany questions with your suggestions."
     "Communicate intentions, findings, decisions, and outcomes as work progresses.",
     "Consider loading relevant skills.",
     "Consider saving context notes if info is relevent to upcomming states.",

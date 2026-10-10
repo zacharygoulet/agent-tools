@@ -1,12 +1,6 @@
 
 
-summary = "Work delivery lifecycle."
-
-details = """
-A workflow for completing a piece of work from selection through follow-up.
-Context saves are optional. For example, a suggestion to save a plan link should
-not influence whether a plan is created.
-"""
+summary = "Workflow from task selection to fully completed"
 
 steps = [
     "Consider saving note in context for Future Work or Self Improve",
