@@ -1,4 +1,3 @@
-- review error management (proper usage of panic/raise/result)
 - trim tests
 - update template.toml to show all features
 - review commands display (human readable)

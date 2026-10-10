@@ -378,27 +378,6 @@ fn lists_states_with_summaries_in_definition_order() {
 }
 
 #[test]
-fn status_for_one_instance_reports_its_current_details() {
-    let directory = tempfile::tempdir().unwrap();
-    let root = directory.path();
-    write_local_definition(root);
-    assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
-
-    let status = run_cli(root, &["status", "run"]);
-    assert!(
-        status.status.success(),
-        "{}",
-        String::from_utf8_lossy(&status.stderr)
-    );
-    let output = String::from_utf8_lossy(&status.stdout);
-    assert!(output.contains("global:\n  details:"), "{output}");
-    assert!(
-        output.contains("definition: workflow\nstate: Design\n  autonomy: guided\n"),
-        "{output}"
-    );
-}
-
-#[test]
 fn status_displays_definition_state_and_next_state_metadata() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
