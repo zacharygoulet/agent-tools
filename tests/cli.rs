@@ -449,7 +449,7 @@ fn bundled_workflow_flow_loads() {
     let root = directory.path();
     let flow_path = root.join(".flows/workflow.toml");
     fs::create_dir_all(flow_path.parent().unwrap()).unwrap();
-    fs::write(&flow_path, include_str!("../../.flows/workflow.toml")).unwrap();
+    fs::write(&flow_path, include_str!("../.flows/workflow.toml")).unwrap();
 
     let started = run_cli(root, &["start", "workflow", "run"]);
     assert!(
@@ -501,7 +501,7 @@ fn bundled_workflow_uses_jump_for_rework() {
     let root = directory.path();
     let path = root.join(".flows/workflow.toml");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(&path, include_str!("../../.flows/workflow.toml")).unwrap();
+    fs::write(&path, include_str!("../.flows/workflow.toml")).unwrap();
     assert!(run_cli(root, &["start", "workflow", "run"]).status.success());
     assert!(run_cli(root, &["jump", "run", "Test"]).status.success());
     let next = run_cli(root, &["next", "run", "Implement"]);

@@ -40,7 +40,7 @@ executable on PATH and integrating it with Pi.
 - Lookup is local-first and falls back globally only if the local path is
   absent, even for a globally stored instance. Consequently a local same-named
   flow can shadow a global flow.
-- The bundled `flows/global.toml` supplies `details` and `steps` to every
+- The bundled `global.toml` supplies `details` and `steps` to every
   instance status, unless its flow has `use_global = false`. It is embedded in
   the executable rather than read from user storage; malformed guidance fails
   status.
@@ -53,7 +53,7 @@ executable on PATH and integrating it with Pi.
 - `flows start <flow-name> [instance-name]` creates an instance. When the
   instance name is omitted, it generates `<flow-name>-<32-hex-digit-UUID>`.
   `flows new-flow-from-template <flow-name> [-g]` creates a flow from
-  `flows/templates/flow.toml`, locally by default or globally with `-g`. It
+  `templates/flow.toml`, locally by default or globally with `-g`. It
   does not overwrite an existing flow in the destination scope.
 - `flows status` lists stored instances; `flows status [instance-name]`
   reports guidance and context for one instance. `flows list` lists flow names
@@ -85,10 +85,11 @@ executable on PATH and integrating it with Pi.
 
 ## Current state and follow-up
 
-The workspace contains the `flows` crate with `start`,
-`new-flow-from-template`, and `status`; validated flows; in-memory and durable
-movement; CLI tests; and a panic-catching `main`. There is no movement history
-or Pi extension yet. Generated instance names use flow-prefixed random UUIDs.
+The repository is a standalone Cargo package named `flows`. It provides
+`start`, `new-flow-from-template`, and `status`; validated flows; in-memory and
+durable movement; CLI tests; and a panic-catching `main`. There is no movement
+history or Pi extension yet. Generated instance names use flow-prefixed random
+UUIDs.
 
 The previous storage layout was `.flow/{definitions,instances}/` locally and
 `$XDG_STATE_HOME/flow/{definitions,instances}/` globally; instance files used
@@ -105,14 +106,14 @@ command types also remains open.
 
 ## Environment
 
-From the workspace root:
+From the repository root:
 
 ```sh
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo run -p flows -- --help
+cargo clippy --all-targets -- -D warnings
+cargo test
+cargo run -- --help
 ```
 
-See the workspace [README](../README.md) for flow-template and
+See the repository [README](../README.md) for flow-template and
 `start`/`status` examples.

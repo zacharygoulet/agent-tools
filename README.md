@@ -1,19 +1,17 @@
-# agent-tools
+# flows
 
-Rust workspace for small agent tools.
+A file-backed CLI for creating and running configured workflows.
 
-## flows
+See the [design and handoff](docs/flow-design.md) for implementation details
+and follow-up work.
 
-See the [Flows design and handoff](docs/flow-design.md) for decisions and
-remaining work.
-
-Build and test from the workspace root:
+Build and test from the repository root:
 
 ```sh
-cargo build -p flows
-cargo test -p flows
-cargo run -p flows -- help
-cargo run -p flows -- help autonomy set
+cargo build
+cargo test
+cargo run -- help
+cargo run -- help autonomy set
 ```
 
 Flow files live directly in `.flows/` or `$XDG_STATE_HOME/flows/`
@@ -21,25 +19,25 @@ Flow files live directly in `.flows/` or `$XDG_STATE_HOME/flows/`
 edit `.flows/workflow.toml` as needed:
 
 ```sh
-cargo run -p flows -- new-flow-from-template workflow
-cargo run -p flows -- list
-cargo run -p flows -- list states workflow
+cargo run -- new-flow-from-template workflow
+cargo run -- list
+cargo run -- list states workflow
 ```
 
-`flows/global.toml` is bundled with the executable and supplies optional
-`details` and `steps` to instance status. A flow can set `use_global = false` to hide
+`global.toml` is bundled with the executable and supplies optional `details`
+and `steps` to instance status. A flow can set `use_global = false` to hide
 that guidance. Flow and state `summary` fields appear in listings and status.
 
 Then create, move, and inspect an instance:
 
 ```sh
-cargo run -p flows -- start workflow run
-cargo run -p flows -- next run Review
-cargo run -p flows -- next run Done
-cargo run -p flows -- status
-cargo run -p flows -- status run
-cargo run -p flows -- context set run goal "Finish review"
-cargo run -p flows -- context remove run goal
+cargo run -- start workflow run
+cargo run -- next run Review
+cargo run -- next run Done
+cargo run -- status
+cargo run -- status run
+cargo run -- context set run goal "Finish review"
+cargo run -- context remove run goal
 ```
 
 An instance is stored in `.flows/instances/` (with `.toml` files) by default.
