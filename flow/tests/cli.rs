@@ -142,13 +142,18 @@ fn loads_instance_with_separate_definition_file() {
         String::from_utf8_lossy(&output.stderr)
     );
     let status = String::from_utf8_lossy(&output.stdout);
-    assert!(status.contains("instance: run\nglobal:\n  details:"), "{status}");
     assert!(
-        status.contains("  steps:\n    - Drive the flow proactively"),
+        status.starts_with(
+            "Instance Status\n\ndefinition: workflow\ncurrent state: Design\nautonomy: guided ("
+        ),
         "{status}"
     );
     assert!(
-        status.contains("definition: workflow\nstate: Design\n  autonomy: guided\n"),
+        status.contains("Global details:\nUse the current state's guidance to drive the work."),
+        "{status}"
+    );
+    assert!(
+        status.contains("Global steps:\n- Drive the flow proactively"),
         "{status}"
     );
 }
@@ -418,22 +423,27 @@ fn status_displays_definition_state_and_next_state_metadata() {
     assert_eq!(
         String::from_utf8_lossy(&status.stdout),
         indoc! {"\
-            instance: run
-            definition: workflow
-              summary: Whole workflow summary
-              details: Definition-wide details
-              steps:
-                - Always do this
-                - Consider this when relevant
-            state: Draft
-              autonomy: guided
-                Pause for user approval at state boundaries and significant decisions.
-              summary: Prepare the work
-              details: Current-state details
-              steps:
-                - Confirm the goal
-                - Check for existing work
-            next states:
+            Instance Status
+
+            definition: workflow (Whole workflow summary)
+            current state: Draft (Prepare the work)
+            autonomy: guided (Pause for user approval at state boundaries and significant decisions.)
+
+            Definitions details:
+            Definition-wide details
+
+            State details:
+            Current-state details
+
+            Definitions steps:
+            - Always do this
+            - Consider this when relevant
+
+            State steps:
+            - Confirm the goal
+            - Check for existing work
+
+            Next states:
               - Review: Review the work
         "}
     );
@@ -465,10 +475,16 @@ fn bundled_workflow_definition_loads() {
         String::from_utf8_lossy(&status.stderr)
     );
     let output = String::from_utf8_lossy(&status.stdout);
-    assert!(output.contains("state: Select"), "{output}");
-    assert!(output.contains("state: Select\n  autonomy: guided\n    Pause for user approval at state boundaries and significant decisions.\n  summary:"), "{output}");
-    assert!(output.contains("  details:"), "{output}");
-    assert!(output.contains("  steps:"), "{output}");
+    assert!(
+        output.contains("current state: Select (Select what to work on.)"),
+        "{output}"
+    );
+    assert!(output.contains("Global details:"), "{output}");
+    assert!(output.contains("Definitions details:"), "{output}");
+    assert!(output.contains("State details:"), "{output}");
+    assert!(output.contains("Global steps:"), "{output}");
+    assert!(output.contains("Definitions steps:"), "{output}");
+    assert!(output.contains("State steps:"), "{output}");
 
     for state in [
         "Define",
@@ -487,8 +503,8 @@ fn bundled_workflow_definition_loads() {
         let status = run_cli(root, &["status", "run"]);
         assert!(status.status.success());
         let output = String::from_utf8_lossy(&status.stdout);
-        assert!(output.contains("global:\n  details:"), "{output}");
-        assert!(output.contains(&format!("state: {state}\n")), "{output}");
+        assert!(output.contains("Global details:"), "{output}");
+        assert!(output.contains(&format!("current state: {state} (")), "{output}");
     }
 }
 
@@ -656,12 +672,12 @@ fn autonomy_range_is_persisted_per_state_and_follows_moves() {
     assert_eq!(saved["autonomy"]["Done"].as_str(), Some("guided"));
 
     let status = run_cli(root, &["status", "run"]);
-    assert!(String::from_utf8_lossy(&status.stdout).contains("state: Design\n  autonomy: steered\n"));
+    assert!(String::from_utf8_lossy(&status.stdout).contains("current state: Design\nautonomy: steered ("));
     assert!(run_cli(root, &["next", "run", "Review"]).status.success());
     let status = run_cli(root, &["status", "run"]);
     let output = String::from_utf8_lossy(&status.stdout);
     assert!(
-        output.contains("state: Review\n  autonomy: autonomous\n"),
+        output.contains("current state: Review\nautonomy: autonomous ("),
         "{output}"
     );
     assert!(
@@ -671,7 +687,7 @@ fn autonomy_range_is_persisted_per_state_and_follows_moves() {
     assert!(run_cli(root, &["jump", "run", "Done"]).status.success());
     assert!(
         String::from_utf8_lossy(&run_cli(root, &["status", "run"]).stdout)
-            .contains("state: Done\n  autonomy: guided\n")
+            .contains("current state: Done\nautonomy: guided (")
     );
 }
 
@@ -806,7 +822,7 @@ fn autonomy_updates_global_instance_and_handles_state_names_with_spaces() {
     assert_eq!(document["autonomy"]["In Progress"].as_str(), Some("steered"));
     assert!(
         String::from_utf8_lossy(&run_cli(root, &["status", "run"]).stdout)
-            .contains("state: In Progress\n  autonomy: steered\n")
+            .contains("current state: In Progress\nautonomy: steered (")
     );
 }
 
@@ -975,7 +991,7 @@ fn new_generates_definition_prefixed_instance_name_that_can_be_loaded() {
         "{}",
         String::from_utf8_lossy(&loaded.stderr)
     );
-    assert!(String::from_utf8_lossy(&loaded.stdout).contains(&format!("instance: {name}")));
+    assert!(String::from_utf8_lossy(&loaded.stdout).contains("Instance Status\n\ndefinition: workflow\n"));
 }
 
 #[test]

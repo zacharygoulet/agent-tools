@@ -20,41 +20,44 @@ impl fmt::Display for InstanceStatus<'_> {
             .find(|state| state.name == instance.state().0)
             .expect("the instance state was validated when it was loaded");
 
-        writeln!(formatter, "instance: {}", instance.name())?;
+        writeln!(formatter, "Instance Status")?;
+        writeln!(formatter)?;
+        write_summary_line(
+            formatter,
+            "definition",
+            definition.name().as_str(),
+            definition.summary().as_deref(),
+        )?;
+        write_summary_line(formatter, "current state", &state.name, state.summary.as_deref())?;
+        let autonomy = instance.current_autonomy();
+        writeln!(
+            formatter,
+            "autonomy: {autonomy} ({})",
+            autonomy_description(autonomy)
+        )?;
+
         if !instance.context().is_empty() {
             writeln!(formatter, "context:")?;
             formatter.write_str(
                 &toml::to_string(instance.context()).expect("context strings serialize to TOML"),
             )?;
         }
-        if *definition.use_global() {
-            let guidance = GlobalGuidance::bundled();
-            writeln!(formatter, "global:")?;
-            write_optional(formatter, "details", guidance.details().as_deref())?;
-            write_steps(formatter, guidance.steps())?;
+
+        let global_guidance = definition.use_global().then(GlobalGuidance::bundled);
+        if let Some(guidance) = &global_guidance {
+            write_section(formatter, "Global details", guidance.details().as_deref())?;
         }
-        writeln!(formatter, "definition: {}", definition.name())?;
-        write_optional(formatter, "summary", definition.summary().as_deref())?;
-        write_optional(formatter, "details", definition.details().as_deref())?;
-        write_steps(formatter, definition.steps())?;
-        writeln!(formatter, "state: {}", state.name)?;
-        let autonomy = instance.current_autonomy();
-        writeln!(formatter, "  autonomy: {autonomy}")?;
-        writeln!(
-            formatter,
-            "    {}",
-            match autonomy {
-                Autonomy::Guided => "Pause for user approval at state boundaries and significant decisions.",
-                Autonomy::Steered => "Proceed by default; ask on consequential choices and report progress.",
-                Autonomy::Autonomous => "Continue independently; stop only for fundamental blockers.",
-            }
-        )?;
-        write_optional(formatter, "summary", state.summary.as_deref())?;
-        write_optional(formatter, "details", state.details.as_deref())?;
-        write_steps(formatter, &state.steps)?;
+        write_section(formatter, "Definitions details", definition.details().as_deref())?;
+        write_section(formatter, "State details", state.details.as_deref())?;
+        if let Some(guidance) = &global_guidance {
+            write_steps_section(formatter, "Global steps", guidance.steps())?;
+        }
+        write_steps_section(formatter, "Definitions steps", definition.steps())?;
+        write_steps_section(formatter, "State steps", &state.steps)?;
 
         if !state.next.is_empty() {
-            writeln!(formatter, "next states:")?;
+            writeln!(formatter)?;
+            writeln!(formatter, "Next states:")?;
             for next in &state.next {
                 let next_state = definition
                     .states()
@@ -71,24 +74,43 @@ impl fmt::Display for InstanceStatus<'_> {
     }
 }
 
-fn write_optional(formatter: &mut fmt::Formatter<'_>, label: &str, value: Option<&str>) -> fmt::Result {
-    if let Some(value) = value {
-        let mut lines = value.trim_end_matches('\n').split('\n');
-        writeln!(formatter, "  {label}: {}", lines.next().unwrap_or_default())?;
-        for line in lines {
-            writeln!(formatter, "    {line}")?;
-        }
+fn write_summary_line(
+    formatter: &mut fmt::Formatter<'_>,
+    label: &str,
+    value: &str,
+    summary: Option<&str>,
+) -> fmt::Result {
+    match summary {
+        Some(summary) => writeln!(formatter, "{label}: {value} ({summary})"),
+        None => writeln!(formatter, "{label}: {value}"),
     }
-    Ok(())
 }
 
-fn write_steps(formatter: &mut fmt::Formatter<'_>, steps: &[String]) -> fmt::Result {
+fn autonomy_description(autonomy: Autonomy) -> &'static str {
+    match autonomy {
+        Autonomy::Guided => "Pause for user approval at state boundaries and significant decisions.",
+        Autonomy::Steered => "Proceed by default; ask on consequential choices and report progress.",
+        Autonomy::Autonomous => "Continue independently; stop only for fundamental blockers.",
+    }
+}
+
+fn write_section(formatter: &mut fmt::Formatter<'_>, label: &str, value: Option<&str>) -> fmt::Result {
+    let Some(value) = value.filter(|value| !value.is_empty()) else {
+        return Ok(());
+    };
+    writeln!(formatter)?;
+    writeln!(formatter, "{label}:")?;
+    writeln!(formatter, "{}", value.trim_end_matches('\n'))
+}
+
+fn write_steps_section(formatter: &mut fmt::Formatter<'_>, label: &str, steps: &[String]) -> fmt::Result {
     if steps.is_empty() {
         return Ok(());
     }
-    writeln!(formatter, "  steps:")?;
+    writeln!(formatter)?;
+    writeln!(formatter, "{label}:")?;
     for step in steps {
-        writeln!(formatter, "    - {step}")?;
+        writeln!(formatter, "- {step}")?;
     }
     Ok(())
 }
