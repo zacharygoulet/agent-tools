@@ -13,7 +13,7 @@ pub struct GlobalGuidance {
 
 impl GlobalGuidance {
     pub fn bundled() -> Self {
-        toml::from_str(include_str!("../global.toml"))
+        toml::from_str(include_str!("assets/global.toml"))
             .raise_with_context(|| "parsing bundled global guidance".into())
     }
 }

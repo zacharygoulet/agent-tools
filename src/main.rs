@@ -8,8 +8,8 @@ use flows::{
 use rust_utils::raise::RaiseExt;
 use uuid::Uuid;
 
-const FLOW_TEMPLATE: &str = include_str!("../templates/flow.toml");
-const HELP_OVERVIEW: &str = include_str!("../help.txt");
+const FLOW_TEMPLATE: &str = include_str!("assets/flow.toml");
+const HELP_OVERVIEW: &str = include_str!("assets/help.txt");
 const MAX_CONTEXT_VALUE_CHARS: usize = 150;
 const CONTEXT_VALUE_LIMIT_MESSAGE: &str = "context values must be at most 150 characters; context is for compact reminders and pointers, not detailed plans or notes";
 

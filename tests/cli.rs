@@ -248,7 +248,7 @@ fn new_flow_from_template_creates_a_valid_local_flow() {
     let flow_path = root.join(".flows/workflow.toml");
     assert_eq!(
         fs::read_to_string(&flow_path).unwrap(),
-        include_str!("../templates/flow.toml")
+        include_str!("../src/assets/flow.toml")
     );
 
     let started = run_cli(root, &["start", "workflow", "run"]);
