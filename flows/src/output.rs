@@ -3,18 +3,18 @@ use std::{
     path::Path,
 };
 
-use flow::{Autonomy, Definition, DefinitionName, GlobalGuidance, Instance};
+use flows::{Autonomy, Flow, FlowName, GlobalGuidance, Instance};
 
 pub struct InstanceStatus<'a>(pub &'a Instance);
 pub struct InstancesTable<'a>(pub &'a [Instance]);
-pub struct DefinitionsTable<'a>(pub &'a [Definition]);
-pub struct StatesTable<'a>(pub &'a Definition);
+pub struct FlowsTable<'a>(pub &'a [Flow]);
+pub struct StatesTable<'a>(pub &'a Flow);
 
 impl fmt::Display for InstanceStatus<'_> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let instance = self.0;
-        let definition = instance.definition();
-        let state = definition
+        let flow = instance.flow();
+        let state = flow
             .states()
             .iter()
             .find(|state| state.name == instance.state().0)
@@ -22,12 +22,7 @@ impl fmt::Display for InstanceStatus<'_> {
 
         writeln!(formatter, "Instance Status")?;
         writeln!(formatter)?;
-        write_summary_line(
-            formatter,
-            "definition",
-            definition.name().as_str(),
-            definition.summary().as_deref(),
-        )?;
+        write_summary_line(formatter, "flow", flow.name().as_str(), flow.summary().as_deref())?;
         write_summary_line(formatter, "current state", &state.name, state.summary.as_deref())?;
         let autonomy = instance.current_autonomy();
         writeln!(
@@ -43,27 +38,27 @@ impl fmt::Display for InstanceStatus<'_> {
             )?;
         }
 
-        let global_guidance = definition.use_global().then(GlobalGuidance::bundled);
+        let global_guidance = flow.use_global().then(GlobalGuidance::bundled);
         if let Some(guidance) = &global_guidance {
             write_section(formatter, "Global details", guidance.details().as_deref())?;
         }
-        write_section(formatter, "Definitions details", definition.details().as_deref())?;
+        write_section(formatter, "Flow details", flow.details().as_deref())?;
         write_section(formatter, "State details", state.details.as_deref())?;
         if let Some(guidance) = &global_guidance {
             write_steps_section(formatter, "Global steps", guidance.steps())?;
         }
-        write_steps_section(formatter, "Definitions steps", definition.steps())?;
+        write_steps_section(formatter, "Flow steps", flow.steps())?;
         write_steps_section(formatter, "State steps", &state.steps)?;
 
         if !state.next.is_empty() {
             writeln!(formatter)?;
             writeln!(formatter, "Next states:")?;
             for next in &state.next {
-                let next_state = definition
+                let next_state = flow
                     .states()
                     .iter()
                     .find(|candidate| candidate.name == next.0)
-                    .expect("definition transitions were validated when it was loaded");
+                    .expect("flow transitions were validated when it was loaded");
                 match next_state.summary.as_deref() {
                     Some(summary) => writeln!(formatter, "  - {}: {summary}", next.0)?,
                     None => writeln!(formatter, "  - {}", next.0)?,
@@ -128,29 +123,29 @@ impl fmt::Display for InstancesTable<'_> {
             .max()
             .unwrap_or(0)
             .max("INSTANCE".len());
-        let definition_width = instances
+        let flow_width = instances
             .iter()
-            .map(|instance| instance.definition().name().as_str().len())
+            .map(|instance| instance.flow().name().as_str().len())
             .max()
             .unwrap_or(0)
-            .max("DEFINITION".len());
+            .max("FLOW".len());
         writeln!(
             formatter,
-            "{:<instance_width$}  {:<definition_width$}  STATE",
-            "INSTANCE", "DEFINITION"
+            "{:<instance_width$}  {:<flow_width$}  STATE",
+            "INSTANCE", "FLOW"
         )?;
         writeln!(
             formatter,
             "{}  {}  -----",
             "-".repeat(instance_width),
-            "-".repeat(definition_width)
+            "-".repeat(flow_width)
         )?;
         for instance in instances {
             writeln!(
                 formatter,
-                "{:<instance_width$}  {:<definition_width$}  {}",
+                "{:<instance_width$}  {:<flow_width$}  {}",
                 instance.name(),
-                instance.definition().name(),
+                instance.flow().name(),
                 instance.state().0
             )?;
         }
@@ -158,20 +153,17 @@ impl fmt::Display for InstancesTable<'_> {
     }
 }
 
-impl fmt::Display for DefinitionsTable<'_> {
+impl fmt::Display for FlowsTable<'_> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.0.is_empty() {
-            return writeln!(formatter, "no definitions found");
+            return writeln!(formatter, "no flows found");
         }
         write_list_table(
             formatter,
-            "DEFINITION",
-            self.0.iter().map(|definition| {
-                (
-                    definition.name().as_str(),
-                    definition.summary().as_deref().unwrap_or(""),
-                )
-            }),
+            "FLOW",
+            self.0
+                .iter()
+                .map(|flow| (flow.name().as_str(), flow.summary().as_deref().unwrap_or(""))),
         )
     }
 }
@@ -217,8 +209,8 @@ pub fn created_instance(instance: &Instance, path: &Path) -> String {
     format!("created instance {} at {}", instance.name(), path.display())
 }
 
-pub fn created_definition(name: &DefinitionName, path: &Path) -> String {
-    format!("created definition {} at {}", name, path.display())
+pub fn created_flow(name: &FlowName, path: &Path) -> String {
+    format!("created flow {} at {}", name, path.display())
 }
 
 pub fn moved_instance(instance: &Instance) -> String {

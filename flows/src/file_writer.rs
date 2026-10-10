@@ -58,7 +58,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("instances/run");
         let contents = indoc! {r#"
-            definition = "workflow"
+            flow = "workflow"
             state = "Design"
         "#};
         let writer = FileWriter::from(path.clone());

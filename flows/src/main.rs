@@ -1,14 +1,14 @@
 mod output;
 
 use clap::{Parser, Subcommand};
-use flow::{
-    Autonomy, ContextUpdate, Definition, DefinitionName, Instance, InstanceName, InstanceSavePolicy, Move,
-    Scope, StateName, Storage,
+use flows::{
+    Autonomy, ContextUpdate, Flow, FlowName, Instance, InstanceName, InstanceSavePolicy, Move, Scope,
+    StateName, Storage,
 };
 use rust_utils::raise::RaiseExt;
 use uuid::Uuid;
 
-const DEFINITION_TEMPLATE: &str = include_str!("../templates/definition.toml");
+const FLOW_TEMPLATE: &str = include_str!("../templates/flow.toml");
 const HELP_OVERVIEW: &str = include_str!("../help.txt");
 const MAX_CONTEXT_VALUE_CHARS: usize = 150;
 const CONTEXT_VALUE_LIMIT_MESSAGE: &str = "context values must be at most 150 characters; context is for compact reminders and pointers, not detailed plans or notes";
@@ -16,18 +16,18 @@ const CONTEXT_VALUE_LIMIT_MESSAGE: &str = "context values must be at most 150 ch
 #[derive(Parser)]
 #[command(about = HELP_OVERVIEW)]
 enum Cli {
-    /// Start a new instance from a definition.
+    /// Start a new instance from a flow.
     Start {
-        /// Definition to start from.
-        definition_name: DefinitionName,
+        /// Flow to start from.
+        flow_name: FlowName,
         /// Optional instance name; generated if omitted.
         instance_name: Option<InstanceName>,
-        /// Save globally, requiring an existing global definition.
+        /// Save globally, requiring an existing global flow.
         #[arg(short, long)]
         global: bool,
-        /// Save globally, copying the local definition if absent globally.
-        #[arg(short = 'G', long = "copy-definition")]
-        copy_definition: bool,
+        /// Save globally, copying the local flow if absent globally.
+        #[arg(short = 'G', long = "copy-flow")]
+        copy_flow: bool,
     },
 
     /// Move to a listed next state.
@@ -52,10 +52,10 @@ enum Cli {
         instance_name: Option<InstanceName>,
     },
 
-    /// List definitions or states in a definition.
+    /// List flows or states in a flow.
     List {
         #[command(subcommand)]
-        target: ListTarget,
+        target: Option<ListTarget>,
     },
 
     /// Set or remove persistent instance context.
@@ -70,10 +70,10 @@ enum Cli {
         action: AutonomyAction,
     },
 
-    /// Create a definition from the bundled template.
-    NewDefinitionFromTemplate {
-        /// Name for the new definition.
-        definition_name: DefinitionName,
+    /// Create a flow from the bundled template.
+    NewFlowFromTemplate {
+        /// Name for the new flow.
+        flow_name: FlowName,
         #[arg(short, long)]
         global: bool,
     },
@@ -81,10 +81,8 @@ enum Cli {
 
 #[derive(Subcommand)]
 enum ListTarget {
-    /// List available definitions.
-    Definitions,
-    /// List states in definition order.
-    States { definition_name: DefinitionName },
+    /// List states in flow order.
+    States { flow_name: FlowName },
 }
 
 #[derive(Subcommand)]
@@ -124,12 +122,10 @@ fn main() {
 
 fn run(cli: Cli) {
     match cli {
-        Cli::Start { definition_name, instance_name, global, copy_definition } => {
-            start(definition_name, instance_name, global, copy_definition)
+        Cli::Start { flow_name, instance_name, global, copy_flow } => {
+            start(flow_name, instance_name, global, copy_flow)
         }
-        Cli::NewDefinitionFromTemplate { definition_name, global } => {
-            create_definition_from_template(definition_name, global)
-        }
+        Cli::NewFlowFromTemplate { flow_name, global } => create_flow_from_template(flow_name, global),
         Cli::Status { instance_name: Some(instance_name) } => status_instance(instance_name),
         Cli::Status { instance_name: None } => status_all(),
         Cli::List { target } => list(target),
@@ -140,26 +136,20 @@ fn run(cli: Cli) {
     }
 }
 
-fn start(
-    definition_name: DefinitionName,
-    instance_name: Option<InstanceName>,
-    global: bool,
-    copy_definition: bool,
-) {
-    let name = instance_name.unwrap_or_else(|| {
-        InstanceName::parse(format!("{}-{}", definition_name, Uuid::new_v4().simple())).raise()
-    });
+fn start(flow_name: FlowName, instance_name: Option<InstanceName>, global: bool, copy_flow: bool) {
+    let name = instance_name
+        .unwrap_or_else(|| InstanceName::parse(format!("{}-{}", flow_name, Uuid::new_v4().simple())).raise());
 
-    let definition = Definition::load_from_name(definition_name.as_str());
-    let instance = definition.into_new_instance(name);
-    let path = instance.save_new(InstanceSavePolicy::from_cli_args(global, copy_definition));
+    let flow = Flow::load_from_name(flow_name.as_str());
+    let instance = flow.into_new_instance(name);
+    let path = instance.save_new(InstanceSavePolicy::from_cli_args(global, copy_flow));
     println!("{}", output::created_instance(&instance, &path));
 }
 
-fn create_definition_from_template(definition_name: DefinitionName, global: bool) {
+fn create_flow_from_template(flow_name: FlowName, global: bool) {
     let scope = if global { Scope::Global } else { Scope::Local };
-    let path = Definition::create_from_template(definition_name.clone(), DEFINITION_TEMPLATE, scope);
-    println!("{}", output::created_definition(&definition_name, &path));
+    let path = Flow::create_from_template(flow_name.clone(), FLOW_TEMPLATE, scope);
+    println!("{}", output::created_flow(&flow_name, &path));
 }
 
 fn status_instance(instance_name: InstanceName) {
@@ -172,19 +162,19 @@ fn status_all() {
     print!("{}", output::InstancesTable(&instances));
 }
 
-fn list(target: ListTarget) {
+fn list(target: Option<ListTarget>) {
     match target {
-        ListTarget::Definitions => {
-            let names = Storage::current().definition_names();
-            let definitions: Vec<_> = names
-                .iter()
-                .map(|name| Definition::load_from_name(name.as_str()))
-                .collect();
-            print!("{}", output::DefinitionsTable(&definitions));
+        Some(ListTarget::States { flow_name }) => {
+            let flow = Flow::load_from_name(flow_name.as_str());
+            print!("{}", output::StatesTable(&flow));
         }
-        ListTarget::States { definition_name } => {
-            let definition = Definition::load_from_name(definition_name.as_str());
-            print!("{}", output::StatesTable(&definition));
+        None => {
+            let names = Storage::current().flow_names();
+            let flows: Vec<_> = names
+                .iter()
+                .map(|name| Flow::load_from_name(name.as_str()))
+                .collect();
+            print!("{}", output::FlowsTable(&flows));
         }
     }
 }

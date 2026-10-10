@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    Definition, DefinitionName, InstanceName, State, StateName,
+    Flow, FlowName, InstanceName, State, StateName,
     file_writer::FileWriter,
     storage::{Scope, Storage},
 };
@@ -17,8 +17,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub struct Instance {
     #[serde(skip, default = "InstanceName::placeholder")]
     name: InstanceName,
-    #[serde(deserialize_with = "load_definition", serialize_with = "save_definition_name")]
-    definition: Definition,
+    #[serde(deserialize_with = "load_flow", serialize_with = "save_flow_name")]
+    flow: Flow,
     state: StateName,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     context: BTreeMap<String, String>,
@@ -51,13 +51,13 @@ pub enum ContextUpdate {
 #[derive(Debug)]
 pub enum InstanceSavePolicy {
     Local,
-    Global { copy_local_definition_to_global: bool },
+    Global { copy_local_flow_to_global: bool },
 }
 
 impl InstanceSavePolicy {
-    pub fn from_cli_args(global: bool, copy_definition: bool) -> Self {
-        if global || copy_definition {
-            Self::Global { copy_local_definition_to_global: copy_definition }
+    pub fn from_cli_args(global: bool, copy_flow: bool) -> Self {
+        if global || copy_flow {
+            Self::Global { copy_local_flow_to_global: copy_flow }
         } else {
             Self::Local
         }
@@ -70,27 +70,27 @@ impl InstanceSavePolicy {
         }
     }
 
-    fn prepare_definition(&self, definition: &Definition) {
+    fn prepare_flow(&self, flow: &Flow) {
         match self {
             Self::Local => {}
-            Self::Global { copy_local_definition_to_global: true } => {
-                definition.install_global_from_local_if_missing();
+            Self::Global { copy_local_flow_to_global: true } => {
+                flow.install_global_from_local_if_missing();
             }
-            Self::Global { copy_local_definition_to_global: false } => definition.ensure_global_definition(),
+            Self::Global { copy_local_flow_to_global: false } => flow.ensure_global_flow(),
         }
     }
 }
 
 impl Instance {
-    pub fn new(name: InstanceName, definition: Definition) -> Self {
-        definition.validate();
-        let state = definition.initial_state().clone();
-        let autonomy = definition
+    pub fn new(name: InstanceName, flow: Flow) -> Self {
+        flow.validate();
+        let state = flow.initial_state().clone();
+        let autonomy = flow
             .states()
             .iter()
             .map(|state| (state.name.clone(), Autonomy::Guided))
             .collect();
-        let instance = Self { name, definition, state, context: BTreeMap::new(), autonomy };
+        let instance = Self { name, flow, state, context: BTreeMap::new(), autonomy };
         instance.validate_current_state();
         instance
     }
@@ -99,32 +99,27 @@ impl Instance {
         let target = match movement {
             Move::Next(target) => {
                 let current = self
-                    .definition
+                    .flow
                     .states()
                     .iter()
                     .find(|state| state.name == self.state.0)
                     .expect("current state was validated");
                 if !current.next.iter().any(|next| next.0 == target.0) {
                     raise::raise(format!(
-                        "state {:?} cannot move next to {:?} in definition {:?}",
+                        "state {:?} cannot move next to {:?} in flow {:?}",
                         self.state.0,
                         target.0,
-                        self.definition.name()
+                        self.flow.name()
                     ));
                 }
                 target
             }
             Move::JumpTo(target) => {
-                if !self
-                    .definition
-                    .states()
-                    .iter()
-                    .any(|state| state.name == target.0)
-                {
+                if !self.flow.states().iter().any(|state| state.name == target.0) {
                     raise::raise(format!(
-                        "cannot move to unknown state {:?} in definition {:?}",
+                        "cannot move to unknown state {:?} in flow {:?}",
                         target.0,
-                        self.definition.name()
+                        self.flow.name()
                     ));
                 }
                 target
@@ -167,13 +162,10 @@ impl Instance {
     }
 
     fn select_autonomy_states(&self, start: &str, end: Option<&str>) -> Vec<String> {
-        let states = self.definition.states();
+        let states = self.flow.states();
         for name in [Some(start), end].into_iter().flatten() {
             if !states.iter().any(|state| state.name == name) {
-                raise::raise(format!(
-                    "unknown state {name:?} in definition {:?}",
-                    self.definition.name()
-                ));
+                raise::raise(format!("unknown state {name:?} in flow {:?}", self.flow.name()));
             }
         }
 
@@ -183,8 +175,8 @@ impl Instance {
 
         states_on_next_paths(states, start, end).unwrap_or_else(|| {
             raise::raise(format!(
-                "no next path from {start:?} to {end:?} in definition {:?}",
-                self.definition.name()
+                "no next path from {start:?} to {end:?} in flow {:?}",
+                self.flow.name()
             ))
         })
     }
@@ -198,7 +190,7 @@ impl Instance {
 
     pub fn save_new(&self, policy: InstanceSavePolicy) -> PathBuf {
         let path = Storage::current().new_instance_path(self.name.as_str(), policy.scope());
-        policy.prepare_definition(&self.definition);
+        policy.prepare_flow(&self.flow);
         self.save_to_path(&path);
         path
     }
@@ -209,16 +201,11 @@ impl Instance {
         let mut instance = Self::deserialize_from_path(&path);
         instance.name = name;
         instance.validate_current_state();
-        for state in instance.definition.states() {
+        for state in instance.flow.states() {
             instance.autonomy.entry(state.name.clone()).or_default();
         }
         for name in instance.autonomy.keys() {
-            if !instance
-                .definition
-                .states()
-                .iter()
-                .any(|state| &state.name == name)
-            {
+            if !instance.flow.states().iter().any(|state| &state.name == name) {
                 raise::raise(format!(
                     "instance {:?} has autonomy for unknown state {name:?}",
                     instance.name
@@ -255,17 +242,12 @@ impl Instance {
     }
 
     fn validate_current_state(&self) {
-        if !self
-            .definition
-            .states()
-            .iter()
-            .any(|state| state.name == self.state.0)
-        {
+        if !self.flow.states().iter().any(|state| state.name == self.state.0) {
             raise::raise(format!(
-                "instance {:?} refers to unknown state {:?} in definition {:?}",
+                "instance {:?} refers to unknown state {:?} in flow {:?}",
                 self.name,
                 self.state.0,
-                self.definition.name()
+                self.flow.name()
             ));
         }
     }
@@ -314,26 +296,26 @@ fn states_on_next_paths(states: &[State], start: &str, end: &str) -> Option<Vec<
     )
 }
 
-fn load_definition<'de, D>(deserializer: D) -> std::result::Result<Definition, D::Error>
+fn load_flow<'de, D>(deserializer: D) -> std::result::Result<Flow, D::Error>
 where
     D: Deserializer<'de>,
 {
     let name = String::deserialize(deserializer)?;
-    let name = DefinitionName::parse(name).map_err(serde::de::Error::custom)?;
-    Ok(Definition::load_from_name(name.as_str()))
+    let name = FlowName::parse(name).map_err(serde::de::Error::custom)?;
+    Ok(Flow::load_from_name(name.as_str()))
 }
 
-fn save_definition_name<S>(definition: &Definition, serializer: S) -> std::result::Result<S::Ok, S::Error>
+fn save_flow_name<S>(flow: &Flow, serializer: S) -> std::result::Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    serializer.serialize_str(definition.name().as_str())
+    serializer.serialize_str(flow.name().as_str())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Definition, Instance, Move, StateName, states_on_next_paths};
-    use crate::{DefinitionName, InstanceName, State};
+    use super::{Flow, Instance, Move, StateName, states_on_next_paths};
+    use crate::{FlowName, InstanceName, State};
     use indoc::indoc;
     use rust_utils::raise::catch_raised;
 
@@ -350,8 +332,8 @@ mod tests {
     fn instance_with_transitions() -> Instance {
         Instance::new(
             InstanceName::parse("run").unwrap(),
-            Definition::new(
-                DefinitionName::parse("workflow").unwrap(),
+            Flow::new(
+                FlowName::parse("workflow").unwrap(),
                 StateName("Draft".into()),
                 vec![
                     state("Draft", vec![StateName("Review".into())]),
@@ -432,8 +414,8 @@ mod tests {
     }
 
     #[test]
-    fn constructor_rejects_invalid_definition() {
-        let definition: Definition = toml::from_str(indoc! {r#"
+    fn constructor_rejects_invalid_flow() {
+        let flow: Flow = toml::from_str(indoc! {r#"
             initial_state = "Missing"
             [[states]]
             name = "Design"
@@ -442,13 +424,13 @@ mod tests {
         .unwrap();
 
         assert!(
-            raised_message(|| Instance::new(InstanceName::parse("run").unwrap(), definition))
+            raised_message(|| Instance::new(InstanceName::parse("run").unwrap(), flow))
                 .contains("unknown initial state")
         );
     }
 
     #[test]
-    fn verifies_current_state_belongs_to_definition() {
+    fn verifies_current_state_belongs_to_flow() {
         let mut instance = instance_with_transitions();
         instance.state = StateName("Missing".into());
         assert!(raised_message(|| instance.validate_current_state()).contains("Missing"));

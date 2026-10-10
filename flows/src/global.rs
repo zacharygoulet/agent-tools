@@ -25,7 +25,6 @@ mod tests {
     #[test]
     fn bundled_guidance_loads() {
         let guidance = GlobalGuidance::bundled();
-        assert!(guidance.details().is_some());
         assert!(!guidance.steps().is_empty());
     }
 

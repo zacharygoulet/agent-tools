@@ -1,6 +1,6 @@
-# Optional metadata for the whole definition. These details and steps appear in status.
+# Optional metadata for the whole flow. These details and steps appear in status.
 summary = "Draft, review, and complete work."
-details = "A small example showing definition-wide and state-specific guidance."
+details = "A small example showing flow-wide and state-specific guidance."
 steps = [
     "Use state guidance to drive the work.",
     "Move only along listed transitions; use jump for exceptional rework.",

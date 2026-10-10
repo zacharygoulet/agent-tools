@@ -1,7 +1,7 @@
-Flow helps AI agents follow configured, deterministic flows. It tracks progress; the agent does the work.
+The `flows` tool helps AI agents follow configured, deterministic flows. It tracks progress; the agent does the work.
 
-A definition describes states, their guidance, and normal next transitions. Start an
-instance from a definition, use status to read its current guidance, move with next,
+A flow describes states, their guidance, and normal next transitions. Start an
+instance from a flow, use status to read its current guidance, move with next,
 or use jump for exceptional moves.
 
 Instances can be assigned autonomy level per state, and per instance context.
@@ -15,6 +15,6 @@ significant decisions. Steered autonomy proceeds by default, asking on consequen
 choices and reporting progress. Autonomous autonomy works independently, stopping
 only for fundamental blockers. Set each level with autonomy set.
 
-Use 'flow status' to see available instances
-Use 'flow start' to start a new instance
-Use 'flow help <command>' for a command's arguments and options.
+Use 'flows status' to see available instances
+Use 'flows start' to start a new instance
+Use 'flows help <command>' for a command's arguments and options.

@@ -1,12 +1,12 @@
-mod definition;
 mod file_writer;
+mod flow;
 mod global;
 mod instance;
 mod name;
 mod storage;
 
-pub use definition::{Definition, State, StateName};
+pub use flow::{Flow, State, StateName};
 pub use global::GlobalGuidance;
 pub use instance::{Autonomy, ContextUpdate, Instance, InstanceSavePolicy, Move};
-pub use name::{DefinitionName, InstanceName};
+pub use name::{FlowName, InstanceName};
 pub use storage::{Scope, Storage};

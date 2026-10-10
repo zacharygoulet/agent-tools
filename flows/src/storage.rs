@@ -2,25 +2,25 @@ use std::{collections::BTreeSet, env, fs, path::PathBuf};
 
 use rust_utils::raise::{self, RaiseContext};
 
-use crate::{DefinitionName, InstanceName};
+use crate::{FlowName, InstanceName};
 
 #[derive(Clone, Copy, Debug)]
 enum StorageFile {
-    Definition,
+    Flow,
     Instance,
 }
 
 impl StorageFile {
     fn label(self) -> &'static str {
         match self {
-            Self::Definition => "definition",
+            Self::Flow => "flow",
             Self::Instance => "instance",
         }
     }
 
     fn directory(self) -> &'static str {
         match self {
-            Self::Definition => "definitions",
+            Self::Flow => "",
             Self::Instance => "instances",
         }
     }
@@ -57,58 +57,49 @@ impl Storage {
                 .raise_with_context(|| "neither XDG_STATE_HOME nor HOME identifies a state directory".into());
             PathBuf::from(home).join(".local/state")
         };
-        Self { local: cwd.join(".flow"), global: state_home.join("flow") }
+        Self { local: cwd.join(".flows"), global: state_home.join("flows") }
     }
 
-    pub fn find_definition(&self, name: &str) -> PathBuf {
-        self.find(name, StorageFile::Definition)
+    pub fn find_flow(&self, name: &str) -> PathBuf {
+        self.find(name, StorageFile::Flow)
     }
 
     pub fn find_instance(&self, name: &str) -> PathBuf {
         self.find(name, StorageFile::Instance)
     }
 
-    pub fn find_local_definition(&self, name: &str) -> PathBuf {
-        let path = self.path(name, StorageFile::Definition, Scope::Local);
+    pub fn find_local_flow(&self, name: &str) -> PathBuf {
+        let path = self.path(name, StorageFile::Flow, Scope::Local);
         if !path.exists() {
-            raise::raise(format!(
-                "local definition {name:?} not found at {}",
-                path.display()
-            ));
+            raise::raise(format!("local flow {name:?} not found at {}", path.display()));
         }
         path
     }
 
-    pub fn find_global_definition(&self, name: &str) -> PathBuf {
-        let path = self.global_definition_path(name);
+    pub fn find_global_flow(&self, name: &str) -> PathBuf {
+        let path = self.global_flow_path(name);
         if !path.exists() {
-            raise::raise(format!(
-                "global definition {name:?} not found at {}",
-                path.display()
-            ));
+            raise::raise(format!("global flow {name:?} not found at {}", path.display()));
         }
         path
     }
 
-    pub fn global_definition_path(&self, name: &str) -> PathBuf {
-        self.path(name, StorageFile::Definition, Scope::Global)
+    pub fn global_flow_path(&self, name: &str) -> PathBuf {
+        self.path(name, StorageFile::Flow, Scope::Global)
     }
 
-    pub fn new_definition_path(&self, name: &str, scope: Scope) -> PathBuf {
-        let path = self.path(name, StorageFile::Definition, scope);
+    pub fn new_flow_path(&self, name: &str, scope: Scope) -> PathBuf {
+        let path = self.path(name, StorageFile::Flow, scope);
         if path.exists() {
-            raise::raise(format!(
-                "definition {name:?} already exists at {}",
-                path.display()
-            ));
+            raise::raise(format!("flow {name:?} already exists at {}", path.display()));
         }
         path
     }
 
-    pub fn definition_names(&self) -> Vec<DefinitionName> {
-        self.file_names(StorageFile::Definition)
+    pub fn flow_names(&self) -> Vec<FlowName> {
+        self.file_names(StorageFile::Flow)
             .into_iter()
-            .map(|name| DefinitionName::parse(name).expect("definition names were validated"))
+            .map(|name| FlowName::parse(name).expect("flow names were validated"))
             .collect()
     }
 
@@ -148,9 +139,9 @@ impl Storage {
                     continue;
                 };
                 match storage_file {
-                    StorageFile::Definition => {
-                        DefinitionName::parse(name.clone()).raise_with_context(|| {
-                            format!("invalid definition filename in {}", directory.display())
+                    StorageFile::Flow => {
+                        FlowName::parse(name.clone()).raise_with_context(|| {
+                            format!("invalid flow filename in {}", directory.display())
                         });
                     }
                     StorageFile::Instance => {
@@ -224,14 +215,14 @@ mod tests {
     }
 
     fn storage_for_test(cwd: &Path, global_state_home: &Path) -> Storage {
-        Storage { local: cwd.join(".flow"), global: global_state_home.join("flow") }
+        Storage { local: cwd.join(".flows"), global: global_state_home.join("flows") }
     }
 
     #[test]
     fn prefers_local_instance() {
         let root = tempfile::tempdir().unwrap();
-        let local = root.path().join(".flow/instances/run.toml");
-        let global = root.path().join("global/flow/instances/run.toml");
+        let local = root.path().join(".flows/instances/run.toml");
+        let global = root.path().join("global/flows/instances/run.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::create_dir_all(global.parent().unwrap()).unwrap();
         fs::write(&local, "local").unwrap();
@@ -246,8 +237,8 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
         let error = raised_message(|| storage.find_instance("run"));
-        assert!(error.contains(".flow/instances/run.toml"));
-        assert!(error.contains("global/flow/instances/run.toml"));
+        assert!(error.contains(".flows/instances/run.toml"));
+        assert!(error.contains("global/flows/instances/run.toml"));
     }
 
     #[test]
@@ -259,40 +250,40 @@ mod tests {
     }
 
     #[test]
-    fn finds_definition_locally_then_globally() {
+    fn finds_flow_locally_then_globally() {
         let root = tempfile::tempdir().unwrap();
-        let local = root.path().join(".flow/definitions/workflow.toml");
-        let global = root.path().join("global/flow/definitions/workflow.toml");
+        let local = root.path().join(".flows/workflow.toml");
+        let global = root.path().join("global/flows/workflow.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::create_dir_all(global.parent().unwrap()).unwrap();
         fs::write(&global, "global").unwrap();
 
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert_eq!(storage.find_definition("workflow"), global);
+        assert_eq!(storage.find_flow("workflow"), global);
         fs::write(&local, "local").unwrap();
-        assert_eq!(storage.find_definition("workflow"), local);
+        assert_eq!(storage.find_flow("workflow"), local);
     }
 
     #[test]
-    fn finds_definition_in_global_storage_only() {
+    fn finds_flow_in_global_storage_only() {
         let root = tempfile::tempdir().unwrap();
-        let local = root.path().join(".flow/definitions/workflow.toml");
+        let local = root.path().join(".flows/workflow.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::write(&local, "local").unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        assert!(catch_raised(|| storage.find_global_definition("workflow")).is_err());
-        let global = storage.global_definition_path("workflow");
+        assert!(catch_raised(|| storage.find_global_flow("workflow")).is_err());
+        let global = storage.global_flow_path("workflow");
         fs::create_dir_all(global.parent().unwrap()).unwrap();
         fs::write(&global, "global").unwrap();
-        assert_eq!(storage.find_global_definition("workflow"), global);
+        assert_eq!(storage.find_global_flow("workflow"), global);
     }
 
     #[test]
     fn rejects_creation_collisions_in_either_scope() {
         let root = tempfile::tempdir().unwrap();
         let storage = storage_for_test(root.path(), &root.path().join("global"));
-        let local = root.path().join(".flow/instances/run.toml");
-        let global = root.path().join("global/flow/instances/run.toml");
+        let local = root.path().join(".flows/instances/run.toml");
+        let global = root.path().join("global/flows/instances/run.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::create_dir_all(global.parent().unwrap()).unwrap();
 
@@ -309,8 +300,8 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let root = tempfile::tempdir().unwrap();
-        let local = root.path().join(".flow/instances/run.toml");
-        let global = root.path().join("global/flow/instances/run.toml");
+        let local = root.path().join(".flows/instances/run.toml");
+        let global = root.path().join("global/flows/instances/run.toml");
         fs::create_dir_all(local.parent().unwrap()).unwrap();
         fs::create_dir_all(global.parent().unwrap()).unwrap();
         symlink("missing-target", &local).unwrap();
