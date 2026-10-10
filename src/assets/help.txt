@@ -1,4 +1,5 @@
-The `flows` tool helps AI agents follow configured, deterministic flows. It tracks progress; the agent does the work.
+The `flows` tool helps AI agents follow configured, deterministic flows. It tracks
+progress; the agent does the work.
 
 A flow describes states, their guidance, and normal next transitions. Start an
 instance from a flow, use status to read its current guidance, move with next,
@@ -18,11 +19,5 @@ only for fundamental blockers. Set each level with autonomy set.
 
 Use 'flows status' to see available instances
 Use 'flows start' to start a new instance
-Use 'flows resume' to claim an unowned instance
-Use 'flows rename' to give an instance a descriptive name, including before
-pausing it for later continuation.
-Use 'flows pause' to release ownership. Before pausing, consider whether another
-agent will continue; if so, add concise handoff context first.
-Use 'flows rename <current-name> <new-name>' to rename an instance
-Use 'flows stop' to delete an instance
+Use 'flows help' for all commands.
 Use 'flows help <command>' for a command's arguments and options.

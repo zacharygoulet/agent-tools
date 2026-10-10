@@ -41,7 +41,7 @@ enum Cli {
         owner: String,
     },
 
-    /// Release ownership of an instance. Consider adding handoff context first.
+    /// Release ownership of an instance. Consider adding context, giving a meaninful name for the instance, or any other handoff first.
     Pause { instance_name: InstanceName },
 
     /// Rename an instance.
